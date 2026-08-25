@@ -1,0 +1,4 @@
+# Kabul testi fixture'ı belirli bir XD dosyasına bağlı (paylaşım linki + ekran id'leri).
+# Diskte durur, repoya girmez.
+fixtures/benchmark.json
+fixtures/acceptance-test.md

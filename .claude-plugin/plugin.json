@@ -1,0 +1,18 @@
+{
+  "name": "d2c",
+  "displayName": "Design to Code (Adobe XD)",
+  "version": "1.1.0",
+  "description": "Adobe XD tasarımlarını ölçüp doğrulanmış Tailwind + React koduna çevirir: ekranı bölümlere ayırır, spec panelinden ölçer, kod üretir, render edip ölçüm + piksel karşılaştırması + review halkasından geçirir.",
+  "author": {
+    "name": "Faruk Özdemir"
+  },
+  "license": "MIT",
+  "keywords": [
+    "adobe-xd",
+    "design-to-code",
+    "tailwind",
+    "react",
+    "visual-diff",
+    "chrome-devtools"
+  ]
+}

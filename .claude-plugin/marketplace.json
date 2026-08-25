@@ -1,0 +1,14 @@
+{
+  "name": "d2c-marketplace",
+  "description": "Adobe XD tasarım-koda araçları. Ölçüm, kod üretimi, piksel doğrulama ve kalite halkası.",
+  "owner": {
+    "name": "Faruk Özdemir"
+  },
+  "plugins": [
+    {
+      "name": "d2c",
+      "source": "./",
+      "description": "Adobe XD tasarımlarını ölçüp doğrulanmış Tailwind + React koduna çevirir."
+    }
+  ]
+}
