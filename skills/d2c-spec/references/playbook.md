@@ -148,3 +148,100 @@ Gerçek bir oturumda doğrulanmış, çalışan yöntemler. Alternatiflerini den
       kenarda 1px kenar yumuşatma hatası %1.4 ölçek hatası, bu da 730px'lik kırpmada
       10px kayma demek. Script bu yüzden ölçeği geniş kenardan türetiyor.
 
+24. **Kalibrasyonu TEK çağrıda yap — pan/zoom deneme-yanılma etme.** Aşağıdaki rutin
+    zoom'u ayarlar, hedefi kaba taramayla bulur, kenarlarını ikili aramayla çözer ve
+    eşlemeyi döndürür. Deneme-yanılma ile 10-15 araç çağrısı harcamanın yerine geçer;
+    her çağrı ~15 sn model gecikmesi demek, bu yüzden fark büyük.
+
+    İki önemli nokta:
+    - **Bekleme uyarlanabilir.** Sabit 550ms yerine panel *değişene kadar* 40ms'de bir
+      yoklar. Tipik probe 150-250ms'e iner, çağrı başına ~60 probe sığar.
+    - **Bütçe sınırlı.** `evaluate_script` ~30 sn'de zaman aşımına uğrar; rutin probe
+      sayısını sayar ve aşarsa **teşhisle döner** (körlemesine tekrar deneme).
+
+    ```js
+    async () => {
+      const ZOOM = 50;                 // 25 genel bakış · 50-75 ölçüm · 200 radius
+      const HEDEF = /Rectangle 7931/;  // null verilirse artboard kenarı aranır
+      let butce = 90;
+
+      const $ = () => document.querySelector('input');
+      const clickAt = (x, y) => {
+        const el = document.elementFromPoint(x, y); if (!el) return;
+        const o = { bubbles:true, cancelable:true, clientX:x, clientY:y, button:0,
+          buttons:1, pointerId:1, pointerType:'mouse', isPrimary:true, view:window };
+        ['pointermove','pointerdown','pointerup'].forEach(t =>
+          el.dispatchEvent(new PointerEvent(t, {...o, buttons: t==='pointerup'?0:1})));
+        ['mousemove','mousedown','mouseup','click'].forEach(t =>
+          el.dispatchEvent(new MouseEvent(t, {...o,
+            buttons: (t==='mousemove'||t==='mousedown')?1:0})));
+      };
+      const readPanel = () => {
+        const c = [...document.querySelectorAll('div,aside,section')].filter(e =>
+          e.offsetWidth>280 && e.offsetWidth<420 && e.offsetHeight>300 && /px/.test(e.innerText||''));
+        if (!c.length) return '';
+        c.sort((a,b) => a.innerText.length - b.innerText.length);
+        return c[c.length-1].innerText.replace(/\n{2,}/g,'\n');
+      };
+      // UYARLANABİLİR PROBE: panel değişene kadar yokla, sabit bekleme yok
+      const probe = async (x, y) => {
+        if (butce-- <= 0) throw new Error('probe bütçesi doldu');
+        const onceki = readPanel();
+        clickAt(x, y);
+        for (let i = 0; i < 18; i++) {
+          await new Promise(r => setTimeout(r, 40));
+          const t = readPanel();
+          if (t && t !== onceki) return t;
+        }
+        return readPanel();
+      };
+      const disi = t => /Screen Details/.test(t) || !/W-?[\d.]+px/.test(t);
+      const tut  = t => HEDEF ? HEDEF.test(t) : !disi(t);
+
+      // 1) zoom
+      const inp = $(), set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;
+      inp.focus(); set.call(inp, String(ZOOM));
+      inp.dispatchEvent(new Event('input',{bubbles:true}));
+      inp.dispatchEvent(new Event('change',{bubbles:true}));
+      ['keydown','keypress','keyup'].forEach(k => inp.dispatchEvent(
+        new KeyboardEvent(k,{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true,cancelable:true})));
+      inp.blur(); await new Promise(r => setTimeout(r, 1300));
+
+      // 2) kaba tarama — hedefi bul, bulamazsa kaydır (sınırlı tur)
+      const cv = document.querySelector('canvas');
+      const kaydir = async (dy, n) => { for (let i=0;i<n;i++) {
+        cv.dispatchEvent(new WheelEvent('wheel',{deltaY:dy,deltaX:0,bubbles:true,cancelable:true,clientX:500,clientY:500}));
+        await new Promise(r=>setTimeout(r,45)); } await new Promise(r=>setTimeout(r,600)); };
+      const X = [200, 500, 800];
+      let ic = null;
+      for (let tur = 0; tur < 8 && !ic; tur++) {
+        for (const x of X) { for (let y = 100; y <= 1250; y += 110) {
+          if (tut(await probe(x, y))) { ic = {x, y}; break; } } if (ic) break; }
+        if (!ic) await kaydir(100, 5);
+      }
+      if (!ic) return { hata: 'hedef bulunamadı', kalanButce: butce,
+                        oneri: 'HEDEF regex yanlış olabilir; sayfayı reload edip ZOOM 25 ile dene' };
+
+      // 3) ikili arama — üst ve sol kenar
+      let lo = Math.max(60, ic.y - 260), hi = ic.y;
+      while (hi - lo > 1) { const m = (lo+hi)>>1; if (tut(await probe(ic.x, m))) hi = m; else lo = m; }
+      const ustV = hi;
+      lo = 0; hi = ic.x;
+      while (hi - lo > 1) { const m = (lo+hi)>>1; if (tut(await probe(m, ic.y))) hi = m; else lo = m; }
+      const solV = hi;
+
+      return { solV, ustV, olcek: ZOOM/100, zoom: ZOOM, kalanButce: butce,
+               not: 'design(x,y) -> vp(solV + olcek*(x - hedefX), ustV + olcek*(y - hedefY))' };
+    }
+    ```
+
+    **Dönen değerin anlamı:** `solV/ustV` HEDEF elemanının sol-üst köşesinin viewport
+    karşılığıdır. Hedef artboard ise doğrudan `design(0,0)`; bir eleman ise o elemanın
+    panelden okunan `X/Y`'siyle offset kur. Eşlemeyi **hemen doğrula**: bilinen ikinci
+    bir elemanın beklenen viewport konumunu hesaplayıp oraya tek probe at.
+
+25. **Kalibrasyonu ve referansı `olcum.json`'a yaz — bir sonraki faz tekrar etmesin.**
+    Ölçüm bitince tarayıcı zaten doğru artboard'da, doğru zoom'da. Referans PNG'yi
+    **orada** yakala (§23) ve kalibrasyonla birlikte `<reportDir>/<slug>/olcum.json`'a
+    kaydet. Kod fazı ve `visual-diff` bu dosyayı okur; XD'ye geri dönmez, çapayı yeniden
+    türetmez. Ölçülen fark: çapayı hazır verince görsel diff **19 dk yerine 10 dk**.

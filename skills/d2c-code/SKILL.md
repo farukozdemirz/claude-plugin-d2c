@@ -49,7 +49,8 @@ Bundan sonra tüm script çağrıları `"$D2C_ROOT/skills/.../scripts/..."` biç
 - Argüman **XD linkiyse**: `d2c-spec` skill'ini çağır (Skill aracı) ve akışını uygula;
   playbook `$D2C_ROOT/skills/d2c-spec/references/playbook.md`. `<reportDir>/<bolum-slug>/spec.md`
   üret. Sonra 2. adıma geç.
-- Argüman **rapor dosyası yoluysa**: dosyayı oku.
+- Argüman **rapor dosyası yoluysa**: dosyayı oku. Yanında `olcum.json` varsa
+  **onu da oku** — kalibrasyon, referans PNG ve kırpma kutusu oradadır.
 - Rapor hedef bölümü içermiyorsa ölçümü tamamla (playbook §6-11), rapora ekle.
 
 ### 2. Mobil + desktop
@@ -110,6 +111,30 @@ sayfayı birbirinizin altından çekersiniz. Ya doğrulamayı `run_in_background
 
 Dönen tabloda sapan varsa **kodu düzelt ve subagent'ı tekrar çağır**.
 
+**Düzeltmeden sonra kendi ön kontrolünü TEK çağrıda yap.** Ayrı `navigate` + ayrı
+`emulate` + ayrı `evaluate_script` üç araç çağrısı ≈ 45 sn demek; hepsi tek
+`evaluate_script`'e sığar:
+
+```js
+async () => {
+  location.reload();                    // ya da zaten yüklüyse atla
+  await new Promise(r => setTimeout(r, 1200));
+  await document.fonts.ready;
+  await new Promise(r => setTimeout(r, 500));
+  const k = document.querySelector('[data-testid="bolum"]').getBoundingClientRect();
+  const g = (id) => { const e = document.querySelector(`[data-testid="${id}"]`);
+    if (!e) return null; const r = e.getBoundingClientRect();
+    return { x: +r.x.toFixed(2), y_rel: +(r.y - k.y).toFixed(2),
+             w: +r.width.toFixed(2), h: +r.height.toFixed(2) }; };
+  return { viewport: window.innerWidth,
+           tasma: document.documentElement.scrollWidth > window.innerWidth,
+           olculen: Object.fromEntries(['id1','id2','id3'].map(i => [i, g(i)])) };
+}
+```
+
+Ön kontrol tuttuysa `design-diff`'i çağır; tutmadıysa **çağırma**, önce düzelt —
+her ajan turu ~2-4 dk.
+
 - En fazla **4 tur**.
 - 4 turda kapanmayan sapmalar raporda **"çözülemedi"** olarak, sebebiyle birlikte
   yazılır. **Gizleme, tolerans gevşetme, hedef değeri değiştirme yok.**
@@ -121,9 +146,15 @@ Sayısal tablo kutuları doğrular, **içlerini doğrulamaz.** Doğrulanmış: �
 olarak temiz çıktı; ilk görsel karşılaştırma `line-clamp-3`'ün eklediği `…` karakterini
 hemen yakaladı.
 
-1. **XD referansını yakala** — `d2c-spec/references/playbook.md` §23.
-2. `visual-diff` subagent'ını çağır: referans PNG yolu, kalibrasyon çapası + tasarım
-   kutusu, render URL'i + seçici + viewport.
+1. **`<reportDir>/<bolum-slug>/olcum.json`'u oku — XD'ye GERİ DÖNME.** Referans PNG,
+   kalibrasyon ve kırpma kutusu ölçüm fazında zaten hazırlandı. Dosya yoksa (eski bir
+   rapor ya da elle verilmiş spec) playbook §23 ile yakala; **varsa yakalama.**
+2. `visual-diff` subagent'ını çağır ve **hazır kırpma kutusunu ver**, çapayı
+   türettirme. Prompt'a: `olcum.json`'daki `referans.png` yolu + `referans.kirpma` +
+   `referans.esleme`, render URL'i + seçici + viewport, ve **bilinen/kabul edilen
+   farklar** (export edilemeyen görseller, yaklaşık ikonlar, eksik fontlar).
+   *Ölçülen fark:* çapayı ajana türettirmek görsel diff'i **19 dk**'ya çıkarıyor;
+   hazır kutu verildiğinde **10 dk**.
 3. Dönen tabloda "aksiyon gerektiren" varsa düzelt ve **hem `design-diff`'i hem
    `visual-diff`'i** tekrar çalıştır (görsel düzeltme ölçüyü bozmuş olabilir).
 

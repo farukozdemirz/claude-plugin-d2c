@@ -16,8 +16,17 @@ Doğrulanmış: üç ekran da sayısal olarak "sapan yok" verdi; ilk görsel kar
 
 ## Girdi
 
-Prompt'ta: XD referans PNG'sinin yolu, kalibrasyon çapası + tasarım kutusu,
-render URL'i + seçici + viewport genişliği.
+Prompt'ta: XD referans PNG'sinin yolu, render URL'i + seçici + viewport genişliği, ve
+**ya hazır kırpma kutusu ya da kalibrasyon çapası**.
+
+**Hazır kırpma kutusu verildiyse `--kalibre` KULLANMA.** Ölçüm fazı kalibrasyonu zaten
+yaptı ve `olcum.json`'a yazdı; sana `referans.kirpma` ve `referans.esleme` olarak
+geliyor. Çapayı yeniden türetmek bu adımı **10 dk yerine 19 dk** yapıyor — ölçüldü.
+Verilen kutuyu bilinen bir elemanla bir kez doğrula, yeter.
+
+Çapa verilip kutu verilmediyse `--kalibre` kullan, ama önce çapanın **benzersiz**
+olduğunu doğrula: ekranda ona yakın başka bir renk varsa script yanlış bloğa
+kilitlenebilir (`--kalibre-tol` ile eşiği daralt).
 
 ## Adımlar
 
@@ -61,7 +70,15 @@ python3 "$D2C_ROOT/skills/d2c-code/scripts/visual-diff.py" XD.png RENDER.png \
   arar; çapanın geniş kenarı ne kadar uzunsa ölçek o kadar hassas olur.
 - Ölçek x/y raporunu kontrol et; çok ayrıksa çapa yanlıştır, ölçme.
 
-### 3. **Görsel dosyaya BAK**
+### 3. **Görsel dosyaya BAK** — bütçeyle
+
+**En sapan 4 bölgeyi incele, her biri için TEK büyütme üret. Dördü aşma.**
+Isı haritası bölgeleri zaten sapma büyüklüğüne göre sıralı; alt sıralardaki bölgeler
+kenar yumuşatma gürültüsü oluyor. Her büyütme bir Bash + bir görüntü okuması, yani
+~2 araç çağrısı ≈ 30 sn; 10 büyütme tek başına 5 dakika demek.
+
+Dördü yetmiyorsa **raporda söyle** ("şu bölge de şüpheli, bakılmadı") — sessizce
+devam edip bütçeyi aşma.
 
 Bu adım atlanamaz. Yüzde tek başına anlamsız — XD metni canvas'a, tarayıcı DOM'a
 çiziyor; metin ağırlıklı bir bölümde taban fark zaten %5-10.

@@ -106,7 +106,10 @@ boş satır analizi → isimlendirme. Çıktıyı tabloya dök:
 ```
 
 Haritayı `<reportDir>/bolum-haritasi-<ekran>.json` olarak kaydet — sonraki
-çalıştırmalar ayrıştırmayı tekrar yapmasın.
+çalıştırmalar ayrıştırmayı tekrar yapmasın. **Kalibrasyonu da bu dosyaya yaz**
+(`{"kalibrasyon": {"desktop": {...}, "mobil": {...}}}`): aynı ekranın sonraki bölümleri
+XD'yi yeniden konumlandırmasın. Beş bölümlü bir ekranda bu tek başına dört kalibrasyon
+turu tasarrufu demek.
 
 Argümanda bölüm belirtilmediyse haritayı göster ve **hangi bölüm(ler)** diye sor.
 `hepsi` denirse sırayla hepsini üret.
@@ -122,6 +125,35 @@ tarifini haritadan üret: bölüm adı + tasarım kutusu (`Y..H`, tam genişlik)
 Bölümler arasında **durma**; biri başarısız olursa kaydet ve sıradakine geç, sonda
 topluca raporla.
 
+## 3b. Hız bütçesi — araç çağrısı say
+
+Bu boru hattında **süre ≈ araç çağrısı sayısı × ~15 sn**. Darboğaz tarayıcı değil,
+çağrı başına model gecikmesi. Ölçüldü: `design-diff` 124 sn / 7 çağrı, `visual-diff`
+612 sn / 53 çağrı. Bekleme sürelerini kısaltmak toplamda 1 dakika bile kazandırmaz;
+**tek kaldıraç çağrı sayısıdır.**
+
+Tek bölüm için hedef bütçe:
+
+| Faz | Çağrı |
+|---|---|
+| Kurulum + kilit + envanter | 3 |
+| Kalibrasyon (playbook §24, **tek çağrı**) | 1-2 |
+| Ölçüm probe'ları (**toplu** — §10) | 4-6 |
+| Referans yakalama (ölçüm fazında) | 2-3 |
+| Kod + önizleme sayfası | 3-4 |
+| Düzeltme + ön kontrol (her tur **tek** çağrı) | 2-4 |
+| Rapor + telemetri | 2 |
+| **Skill toplamı** | **~18** |
+| `design-diff` ×2 · `visual-diff` ×1 | (ajanlar) |
+
+**En sık israf edilen yerler:**
+1. Pan/zoom deneme-yanılma → playbook **§24** rutinini kullan, improvize etme.
+2. Kod fazında XD'ye geri dönmek → `olcum.json` zaten hazır (§4).
+3. Düzeltme sonrası ayrı `navigate` + `emulate` + `evaluate` → **tek** `evaluate_script`.
+4. Ajanı erken çağırmak → önce kendi ön kontrolünü yap; her ajan turu 2-4 dk.
+
+Bütçeyi aşıyorsan **dur ve nedenini söyle** — sessizce 40 dakika harcama.
+
 ## 4. Rapor
 
 Her şey `<reportDir>` altına (varsayılan `docs/d2c/`) — repo kökünü kirletme:
@@ -129,12 +161,18 @@ Her şey `<reportDir>` altına (varsayılan `docs/d2c/`) — repo kökünü kirl
 ```
 docs/d2c/
   bolum-haritasi-<ekran>.json
-  <bolum-slug>/spec.md        ← /d2c-spec çıktısı
+  <bolum-slug>/spec.md        ← /d2c-spec çıktısı (insan için)
+  <bolum-slug>/olcum.json     ← /d2c-spec çıktısı (SONRAKİ FAZLAR için)
+  <bolum-slug>/xd-<vp>.png    ← görsel diff referansı, ölçüm fazında yakalandı
   <bolum-slug>/code.md        ← /d2c-code çıktısı
   ozet.md                     ← tüm bölümlerin tek tablosu
 ```
 
 `ozet.md`: bölüm | ölçüm turu | sapma | görsel diff | review bulgusu | sonuç.
+
+**`olcum.json` boş geçilemez.** Kalibrasyon, referans PNG yolu ve kırpma kutusu orada
+tutulur; yoksa kod fazı XD'ye geri döner ve `visual-diff` çapayı yeniden türetir —
+bölüm başına **~15 araç çağrısı ≈ 4 dakika** kayıp. Şeması `d2c-spec` SKILL.md'de.
 
 ## 5. Eşzamanlılık — kilit
 

@@ -21,18 +21,63 @@ alternatiflerini deneme (özellikle WebFetch/curl, MCP `click`, klavye/scroll pa
 1. **Önkoşul.** chrome-devtools MCP araçları (`mcp__chrome-devtools__*`) yoksa kullanıcıya
    şu komutu söyle ve **dur**:
    ```
-   claude mcp add chrome-devtools -- npx -y chrome-devtools-mcp@latest
+   claude mcp add chrome-devtools -- npx -y chrome-devtools-mcp@latest --isolated
    ```
 2. **Aç ve hazırla.** Linki aç, diyalogları kapat, geniş viewport ayarla (playbook §2-4).
 3. **Snapshot.** `take_snapshot` ile ekran kimliği + renk paleti + character styles çıkar (§5).
 4. **Görev tarifi YOKSA:** genel rapor üret — ekran listesi (§12) + palet + tipografi +
    düşük zoom'da (%22-25) ekran görüntüsünden bölüm listesi — ve kullanıcıya hangi bölümü
    ölçmek istediğini sor.
-5. **Görev tarifi VARSA:** bölgeye zoom/pan yap (§6-7), elemanları tıklayıp panelden oku
-   (§8-11), boşlukları kutu koordinatlarından hesapla (§14).
-6. **Raporla.** `docs/d2c/<bolum-slug>/spec.md`'ye yaz + terminalde özetle.
-   (Tek başına çağrıldıysa ve bölüm belli değilse `docs/d2c/spec.md`.)
-   Repo köküne rapor yazma.
+5. **Görev tarifi VARSA — kalibre et.** Bölgeye pan/zoom yapmak için **deneme-yanılma
+   ETME**: playbook **§24**'teki tek çağrılık kalibrasyon rutinini kullan. Zoom'u ayarlar,
+   hedefi bulur, kenarları ikili aramayla çözer, eşlemeyi döndürür. Eşlemeyi hemen ikinci
+   bir elemanla doğrula.
+6. **Ölç.** Elemanları tıklayıp panelden oku (§8-11), boşlukları kutu koordinatlarından
+   hesapla (§14). Probe'ları **toplu** yap — tek `evaluate_script` içinde çok nokta
+   (§10); her araç çağrısı ~15 sn model gecikmesi demek.
+7. **Referansı BURADA yakala.** Tarayıcı zaten doğru artboard'da ve doğru zoom'da.
+   Playbook §23'e göre dpr 2 + zoom %50 ayarla, **seçimi kaldır** (artboard dışına tıkla —
+   XD seçili elemanı magenta ana hatla çiziyor ve köşe ölçümünü bozuyor), PNG'ye al:
+   `<reportDir>/<bolum-slug>/xd-<viewport>.png`. Kod fazı bunu yeniden yakalamayacak.
+8. **Raporla — iki dosya.** Repo köküne yazma.
+   - `<reportDir>/<bolum-slug>/spec.md` — insan için (aşağıdaki format)
+   - `<reportDir>/<bolum-slug>/olcum.json` — **sonraki fazlar için** (aşağıdaki şema)
+
+   Tek başına çağrıldıysa ve bölüm belli değilse `<reportDir>/spec.md`.
+
+## `olcum.json` — fazlar arası durum sözleşmesi
+
+**Bu dosya olmadan sonraki fazlar aynı işi baştan yapar.** `/d2c-code` §4b XD'ye geri
+dönüp konumlandırma yapar, `visual-diff` çapayı yeniden türetir; ölçülen maliyet
+bölüm başına **~15 araç çağrısı ≈ 4 dakika**.
+
+```jsonc
+{
+  "ekran":    { "ad": "…", "sayac": "8 of 24", "screen_id": "…", "mobil_screen_id": "…" },
+  "artboard": { "desktop": [1440, 1494], "mobil": [375, 1064] },
+  "kalibrasyon": {                        // playbook §24'ün döndürdüğü değerler
+    "desktop": { "zoom": 50, "solV": 267, "ustV": 314, "olcek": 0.5, "hedef": "artboard" },
+    "mobil":   { "zoom": 75, "solV": 467, "ustV": 297, "olcek": 0.75, "hedef": "artboard" }
+  },
+  "bolum_kutu": { "desktop": [940, 0, 500, 1080], "mobil": [0, 0, 375, 1080] },
+  "referans": {
+    "desktop": {
+      "png": "xd-desktop.png",            // <reportDir>/<slug>/ altında
+      "dpr": 2, "zoom": 50,
+      "esleme": { "dx": 534, "dy": 628 }, // cihaz_px = (dx + tasarim_x, dy + tasarim_y)
+      "kirpma": [1474, 628, 500, 1080]    // bölümün referans PNG içindeki kutusu
+    }
+  },
+  "capa": { "hex": "#0C2380", "tasarim_kutu": [972, 939.13, 436, 64] }
+}
+```
+
+- `esleme` **1 tasarım px = 1 cihaz px** olduğu yakalamada geçerlidir (dpr 2 + zoom %50).
+  Yakalamadan sonra bilinen bir elemanın PNG içindeki kutusunu ölçüp **doğrula** ve
+  doğrulamayı `spec.md`'ye yaz.
+- `capa`: bölüm içindeki **benzersiz renkli, dolu, geniş** eleman. Ekranda ona yakın
+  başka bir renk varsa (kampanya banner'ı gibi) `kirpma` zaten hazır olduğu için
+  `visual-diff` çapayı hiç türetmeyecek — sorun çıkmaz.
 
 ## Rapor formatı
 

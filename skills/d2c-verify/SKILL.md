@@ -16,6 +16,7 @@ refactor'ın hizayı bozup bozmadığını görmek için.
 
 - **Bileşen adı veya rota** — `yorum-karti` ya da `/yorum-karti-preview`
 - **XD linki** (isteğe bağlı) — verilmezse `<reportDir>/<slug>/spec.md`'deki ölçümler
+  ve yanındaki **`olcum.json`** (kalibrasyon + hazır referans PNG + kırpma kutusu)
   hedef değer olarak kullanılır. Verilirse önce yeniden ölçülür (tasarım değişmiş olabilir).
 
 ## Akış
