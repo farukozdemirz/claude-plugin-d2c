@@ -174,10 +174,42 @@ hemen yakaladı.
    farklar** (export edilemeyen görseller, yaklaşık ikonlar, eksik fontlar).
    *Ölçülen fark:* çapayı ajana türettirmek görsel diff'i **19 dk**'ya çıkarıyor;
    hazır kutu verildiğinde **10 dk**.
-3. Dönen tabloda "aksiyon gerektiren" varsa düzelt ve **hem `design-diff`'i hem
-   `visual-diff`'i** tekrar çalıştır (görsel düzeltme ölçüyü bozmuş olabilir).
+3. Dönen tabloda "aksiyon gerektiren" varsa **düzelt**, sonra aşağıdaki kurala göre
+   ne çalıştıracağına karar ver.
 
 Yüzde bir geçme notu değil — ajanın "ne gördüm" satırlarına bak.
+
+#### Görsel tur bütçesi — EN FAZLA 2
+
+`design-diff`'in 4 turu var; **`visual-diff`'in 2 turu var.** Sebebi maliyet: bir görsel
+tur 8-17 dk, bir ölçüm turu 3 dk. Ölçülen gerçek koşu: 3 görsel tur **35 dakika**
+yedi ve toplam süreyi 106 dakikaya çıkardı.
+
+**Düzeltmeden sonra tam bir görsel tur ÇALIŞTIRMA — önce hedefli doğrula.**
+Bulguların çoğu tek bir sayıyla doğrulanabilir (kutu 50 oldu mu, ürün adı x=160'a
+oturdu mu, `resize` kapandı mı). Bunu §4'teki tek çağrılık ön kontrolle yap.
+
+İkinci görsel turu **yalnızca** şu ikisinden biri varsa çalıştır:
+
+- Düzeltme **yeni piksel üretiyorsa** (eleman eklendi/çıkarıldı, ikon değişti, sarma
+  noktası kaydı) — hedefli ölçüm bunu göremez.
+- Ön kontrol bulgunun kapandığını **doğrulayamıyorsa**.
+
+Salt konum/boyut düzeltmeleri için ikinci tur **gereksiz**: `design-diff` zaten ölçüyor.
+
+**2 turda kapanmayan görsel bulgular `code.md`'ye "çözülemedi" olarak yazılır** —
+sebebiyle birlikte. Gizleme yok, ama üçüncü tur da yok.
+
+#### Düzeltme sonrası hangi ajan?
+
+| Ne düzelttin | Çalıştır |
+|---|---|
+| Konum / boyut / renk / font | `design-diff` (tek başına) |
+| Eleman eklendi-çıkarıldı, ikon, sarma noktası | `design-diff` **+** `visual-diff` |
+| Yalnız erişilebilirlik / semantik | hiçbiri — ön kontrol yeter |
+
+Her ikisini birden çalıştırmak refleks olmasın: ölçülen koşuda 3 görsel tur otomatik
+olarak 3 ölçüm turu daha getirdi ve maliyet çarpımsal büyüdü.
 
 ### 4c. Kod incele
 

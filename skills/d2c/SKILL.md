@@ -151,8 +151,28 @@ Tek bölüm için hedef bütçe:
 2. Kod fazında XD'ye geri dönmek → `olcum.json` zaten hazır (§4).
 3. Düzeltme sonrası ayrı `navigate` + `emulate` + `evaluate` → **tek** `evaluate_script`.
 4. Ajanı erken çağırmak → önce kendi ön kontrolünü yap; her ajan turu 2-4 dk.
+5. **Refleksle iki ajanı birden çalıştırmak** → `d2c-code` §4b'deki "hangi ajan"
+   tablosuna bak; salt konum düzeltmesi görsel tur gerektirmez.
 
-Bütçeyi aşıyorsan **dur ve nedenini söyle** — sessizce 40 dakika harcama.
+## 3c. Zaman tavanı — 25 dakika
+
+Ölçülen gerçek bir koşu **106 dakika** sürdü. Dağılımı, neyin patladığını gösteriyor:
+
+| | Süre | Pay |
+|---|---|---|
+| Ana döngü (ölçüm + kod + rapor) | 57,3 dk | %54 |
+| `visual-diff` **3 tur** | 35 dk | %33 |
+| `design-diff` **4 tur** | 13,2 dk | %13 |
+
+İki ders:
+- **Ana döngü ajanlardan büyük.** Neredeyse tamamı pan/zoom deneme-yanılması ve
+  tekrar eden konumlandırma — §24 ve `olcum.json` bunun içindir.
+- **Maliyeti tur sayısı belirliyor**, tur başına maliyet değil. `design-diff` 4 turun
+  tamamına dayanmış, `visual-diff`'in ise o zaman hiç sınırı yoktu.
+
+**Bir bölüm 25 dakikayı aşarsa dur.** Kullanıcıya nerede olduğunu ve sürenin nereye
+gittiğini söyle (kaç ölçüm turu, kaç görsel tur, hangi bulgu kapanmıyor). Devam edip
+etmemeye o karar versin. **Sessizce bir saat harcama.**
 
 ## 4. Rapor
 
