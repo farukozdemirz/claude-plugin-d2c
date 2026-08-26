@@ -85,24 +85,43 @@ Token adayı çıktıysa raporun "önerilen token" bölümünde öne çıkar.
 
 ### 3. Kod üret
 
-`references/tailwind.md` kurallarına göre. Bileşeni projenin mevcut yapısına yerleştir
-(App Router; `components/` yoksa oluştur). Doğrulanabilmesi için bileşeni render eden
-bir sayfa rotası da lazım — yoksa `app/<ad>-preview/page.tsx` aç.
+**Önce font kutularını ÖLÇ.** `references/tailwind.md` → "fontKutusu'nu VARSAYMA".
+Tek `evaluate_script` ile kullanacağın her aile/punto için `fontBoundingBox` topla ve
+yarı-satırı gerçek sayıdan hesapla. `1.25 × punto` varsayımı Bw Modelica'da doğru,
+**Tobias'ta 1.375** — varsaymak iki ayrı ekranda başlığı 4px kaydırdı ve her defasında
+bir görsel diff turu harcattı. Bu tek çağrı o turu geri kazandırır.
+
+Sonra `references/tailwind.md` kurallarına göre yaz. Bileşeni projenin mevcut yapısına
+yerleştir (App Router; `componentsDir` yoksa oluştur). Doğrulanabilmesi için bileşeni
+render eden bir sayfa rotası da lazım — yoksa `<previewDir>/<ad>-preview/page.tsx` aç.
 
 Ölçülecek elemanlara **stabil `data-testid`** ver (`data-testid="yorum-karti"`).
 `design-diff` bunları seçici olarak kullanacak; sınıf adlarına dayanmak kırılgan.
 
+**`testid`'leri `olcum.json`'a geri yaz.** Ölçüm fazı elemanları XD adıyla biliyor
+(`Rectangle 7931`), sen onlara `testid` verdin. İkisini eşleştirip `elemanlar[]`
+dizisindeki ilgili kayda `"testid"` alanını ekle. `design-diff` hedef tablosunu bu
+dosyadan okuyacak — eşleme olmazsa okuyamaz (§4).
+
 ### 4. Doğrula
 
-`design-diff` subagent'ını çağır. Prompt'una şunları ver:
-- sayfa URL'i (veya "dev server'ı sen başlat" — 3000 dolu olabilir, boş port seçmeli)
-- ölçülecek `data-testid` seçicileri
-- her seçici için **XD hedef değerleri** (rapordan, P ve hesaplanan olanlar)
-- ölçülecek viewport'lar (mobil + desktop artboard genişlikleri)
-- **her eleman için beklenen font ailesi ayrı ayrı** — "bu tasarımın fontu X" gibi genel
-  bir cümle yazma. Agent bunu "her eleman X olmalı" diye okuyup, tasarımın bilerek başka
-  aile kullandığı elemanlar için **yanlış ✗** üretiyor. Hedefi elemanla birlikte ver:
-  `başlık: Tobias Light`, `tarih: Helvetica Neue (projede yok, fallback normal)`.
+`design-diff` subagent'ını çağır. **Hedef tablosunu prompt'a ELLE YAZMA** —
+`olcum.json`'un yolunu ver, ajan `Read` ile kendisi okusun. Elle transkripsiyon hem
+prompt'u şişiriyor (ekran başına 30+ satır) hem de sessiz hata kaynağı: yanlış
+yazarsan ajan yanlış şeyi doğrular ve kimse fark etmez.
+
+Prompt'una şunları ver:
+- **`<reportDir>/<bolum-slug>/olcum.json` yolu** — hedefler, `testid` eşlemesi,
+  artboard genişlikleri hepsi orada
+- sayfa URL'i (dev server çalışıyorsa "zaten çalışıyor" de, yeniden başlatmasın)
+- ölçülecek viewport'lar
+- **kabul edilen sapmalar** (border-box, metin çerçevesi, yaklaşık ikonlar, eksik
+  fontlar) — bunlar `olcum.json`'da yok, prompt'ta olmalı
+
+Font ailesi hedefleri `elemanlar[].font.aile` alanından gelir; **"bu tasarımın fontu X"
+gibi genel bir cümle yazma.** Ajan bunu "her eleman X olmalı" diye okuyup, tasarımın
+bilerek başka aile kullandığı elemanlar için **yanlış ✗** üretiyor. Projede yüklü
+olmayan aileler için (`Helvetica Neue` gibi) prompt'ta "⚠ say, ✗ sayma" de.
 
 **Tarayıcı çakışması:** `design-diff` ile aynı chrome-devtools MCP tarayıcısını
 paylaşıyorsun. Subagent'ı **arka planda başlatıp** sen de XD ölçmeye devam edersen

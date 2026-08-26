@@ -14,8 +14,16 @@ Düzeltme çağıran skill'in işi.
 
 ## Girdi
 
-Prompt'ta şunlar olur: sayfa URL'i (veya "dev server'ı sen başlat"), ölçülecek CSS
-seçicileri ve her seçici için XD hedef değerleri. Viewport bilgisi verilebilir
+**Hedefler çoğu zaman bir dosyadadır.** Prompt'ta `olcum.json` yolu verildiyse
+**`Read` ile onu oku** — `elemanlar[]` dizisi her eleman için `testid`, kutu, radius,
+renk ve font hedeflerini taşır; `artboard` viewport genişliklerini verir. Prompt'a elle
+yazılmış bir tablo bekleme.
+
+`elemanlar[].testid` `null` ise kod fazı eşlemeyi doldurmamıştır — **ölçme, bunu
+söyle.** Uydurma seçiciyle ölçmek sessizce yanlış sonuç üretir.
+
+Prompt'ta ayrıca: sayfa URL'i (veya "dev server'ı sen başlat"), ölçülecek viewport'lar
+ve **kabul edilen sapmalar** olur. Hedefler dosyadan gelmiyorsa prompt'ta olur
 (ör. mobil 390, desktop 1440) — verildiyse her ikisinde de ölç.
 
 ## Adımlar

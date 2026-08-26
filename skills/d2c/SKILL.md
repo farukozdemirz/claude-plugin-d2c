@@ -200,16 +200,46 @@ tarayıcıyı senin altından çeker.
 
 ## 6. Telemetri
 
-Her çalıştırma `<reportDir>/runs.jsonl`'a **bir satır** ekler (bölüm başına bir satır):
+Her çalıştırma `<reportDir>/runs.jsonl`'a **bir satır** ekler (bölüm başına bir satır).
+
+**Bölüme başlarken zaman damgasını al** — sonda hesaplayamazsın:
+
+```bash
+BASLANGIC=$(date +%s)
+```
+
+Bölüm bitince satırı yaz:
+
+```bash
+printf '%s\n' "{\"tarih\":\"$(date -Iseconds)\",\"surum\":\"$(python3 -c "
+import json;print(json.load(open('$D2C_ROOT/.claude-plugin/plugin.json'))['version'])")\",...,\"sure_sn\":$(( $(date +%s) - BASLANGIC ))}" >> "$REPORT_DIR/runs.jsonl"
+```
+
+Tam şema:
 
 ```json
-{"tarih":"2026-08-25T14:02:11+03:00","ekran":"Desktop - Ekran A","bolum":10,"bolum_ad":"Bölüm Başlığı","artboardlar":["1440x3778","375x4164"],"olcum_turu":2,"sapma":0,"gorsel_diff":{"ham":7.81,"yapisal":10.03,"aksiyon":0},"review_bulgu":10,"review_uygulanan":6,"cozulemedi":1,"sonuc":"tamam","sure_sn":842}
+{"tarih":"2026-08-26T14:02:11+03:00","surum":"1.3.0","ekran":"Desktop - Ekran A","bolum":10,"bolum_ad":"Bölüm Başlığı","artboardlar":["1440x3778","375x4164"],"olcum_turu":2,"sapma":0,"gorsel_diff":{"ham":7.81,"yapisal":10.03,"aksiyon":0},"review_bulgu":10,"review_uygulanan":6,"cozulemedi":1,"sonuc":"tamam","sure_sn":842}
 ```
 
 `sonuc`: `tamam` · `sapmayla-bitti` · `basarisiz` · `atlandi-zaten-var`
 
-Aracın gerçek isabet oranı bu dosyadan çıkar. **Atlama** — turlar ve sapmalar
-yazılmazsa hangi kuralın işe yaradığı bilinemez.
+**`sure_sn` ve `surum` boş geçilemez.** Aracın isabet oranı *ve hızı* bu dosyadan çıkar;
+`surum` olmadan bir iyileştirmenin işe yarayıp yaramadığı karşılaştırılamaz. Bu alanlar
+`null` bırakıldığı için 1.2.0'ın hız kazancı ölçülemedi — tekrarlama.
+
+Karşılaştırma:
+
+```bash
+python3 - <<'EOF'
+import json, collections
+d = collections.defaultdict(list)
+for l in open("docs/d2c/runs.jsonl"):
+    r = json.loads(l)
+    if r.get("sure_sn"): d[r.get("surum","?")].append(r["sure_sn"])
+for v, s in sorted(d.items()):
+    print(f"{v}: n={len(s)} ortanca={sorted(s)[len(s)//2]}sn ort={sum(s)//len(s)}sn")
+EOF
+```
 
 ## 7. Öğrendiğini kaydet
 

@@ -19,6 +19,9 @@ Doğrulanmış: üç ekran da sayısal olarak "sapan yok" verdi; ilk görsel kar
 Prompt'ta: XD referans PNG'sinin yolu, render URL'i + seçici + viewport genişliği, ve
 **ya hazır kırpma kutusu ya da kalibrasyon çapası**.
 
+Prompt'ta `olcum.json` yolu verildiyse **`Read` ile oku** — `referans.png`,
+`referans.kirpma`, `referans.esleme` ve `bolum_kutu` oradadır.
+
 **Hazır kırpma kutusu verildiyse `--kalibre` KULLANMA.** Ölçüm fazı kalibrasyonu zaten
 yaptı ve `olcum.json`'a yazdı; sana `referans.kirpma` ve `referans.esleme` olarak
 geliyor. Çapayı yeniden türetmek bu adımı **10 dk yerine 19 dk** yapıyor — ölçüldü.

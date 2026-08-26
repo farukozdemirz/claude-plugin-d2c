@@ -126,8 +126,33 @@ aşağı doğru **~2-3px kayabilir** ve bu kayma birikir.
 - CSS ise `n × line-height` render eder.
 - Fark `line-height − fontKutusu` kadardır ve **yarısı üstte, yarısı altta** durur.
 
-Bw Modelica'da `fontKutusu ≈ 1.25 × font-size` (doğrulanmış: 12→15, 16→20; büyük
-puntolarda aşağı yuvarlıyor: 18→22, 24→29, 32→38).
+### fontKutusu'nu VARSAYMA — tarayıcıda ÖLÇ
+
+`fontKutusu ≈ 1.25 × font-size` **her aile için doğru değil.** Bw Modelica'da tutuyor
+(12→15, 16→20, 18→22, 24→29, 32→38) ama **Tobias'ta 1.375** çıktı: 48px'te tarayıcının
+`fontBoundingBox` toplamı **66px**. Bu farkı varsaymak başlığı **4px aşağı kaydırdı** ve
+`design-diff` göremedi (kutu doğru, glif yanlış) — ancak görsel diff yakaladı, yani
+**bir tur harcandı**. Aynı hata iki ayrı ekranda tekrarlandı.
+
+Kod yazmadan **önce** kullanacağın her aile/punto için tek çağrıda ölç:
+
+```js
+async () => {
+  await document.fonts.ready;
+  const c = document.createElement('canvas').getContext('2d');
+  // Kullanılacak aile/punto çiftleri — üretilen ad, XD'deki değil
+  const cift = [['tobias', 48], ['tobias', 28], ['bwModelica', 18], ['bwModelica', 16]];
+  return cift.map(([aile, px]) => {
+    c.font = `${px}px "${aile}"`;
+    const m = c.measureText('Hxg');
+    const kutu = m.fontBoundingBoxAscent + m.fontBoundingBoxDescent;
+    return { aile, px, fontKutusu: +kutu.toFixed(2), oran: +(kutu / px).toFixed(3) };
+  });
+}
+```
+
+Dönen `fontKutusu` ile yarı-satırı hesapla. **`oran` 1.25'ten belirgin sapıyorsa
+`spec.md`'ye yaz** — o aile için kural farklı.
 
 **Sonucu iki yerde görürsün:**
 

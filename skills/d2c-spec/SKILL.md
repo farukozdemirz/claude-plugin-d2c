@@ -68,9 +68,41 @@ bölüm başına **~15 araç çağrısı ≈ 4 dakika**.
       "kirpma": [1474, 628, 500, 1080]    // bölümün referans PNG içindeki kutusu
     }
   },
-  "capa": { "hex": "#0C2380", "tasarim_kutu": [972, 939.13, 436, 64] }
+  "capa": { "hex": "#0C2380", "tasarim_kutu": [972, 939.13, 436, 64] },
+
+  "elemanlar": [
+    {
+      "ad": "Rectangle 7931",          // XD panelindeki eleman adı
+      "rol": "panel",                  // insan için kısa etiket
+      "testid": null,                  // KOD FAZI doldurur (d2c-code §3)
+      "desktop": { "kutu": [940,0,500,1080], "radius": 24, "radius_kaynak": "P",
+                   "renk": "#FFFFFF", "padding": 32 },
+      "mobil":   { "kutu": [0,0,375,1080], "radius": 0, "padding": 24 }
+    },
+    {
+      "ad": "Text : Ürünü Değerlendir", "rol": "baslik", "testid": null,
+      "font": { "aile": "Tobias TRIAL", "agirlik": "Light", "punto": 28,
+                "satir": 32, "ls": 0, "renk": "#0C2380" },
+      "desktop": { "kutu": [972, 92, 223, 32] },
+      "mobil":   { "kutu": [24, 80, 223, 32] }
+    }
+  ],
+  "hesaplanan": [
+    { "ne": "panel padding", "deger": 32, "nasil": "baslik.x(972) − panel.x(940)" }
+  ],
+  "cozulemedi": []
 }
 ```
+
+- **`elemanlar[]` ölçülen HER elemanı içerir** — `design-diff` hedef tablosunu buradan
+  okuyacak, prompt'a elle transkribe edilmeyecek. Elle yazmak hem prompt'u şişiriyor
+  hem de sessiz transkripsiyon hatası riski taşıyor (yanlış yazarsan ajan yanlış şeyi
+  doğrular, kimse fark etmez).
+- **`radius_kaynak`**: `P` panelden · `Ö` pikselden · `H` hesaplanan. `Path`
+  elemanlarında panel radius vermez (playbook §16) — `Ö` ise ölçüm kanıtını
+  `spec.md`'ye yaz.
+- **`testid` başta `null`.** Kod fazı doldurur (`d2c-code` §3); doldurulmadan
+  `design-diff` bu dosyayı kullanamaz.
 
 - `esleme` **1 tasarım px = 1 cihaz px** olduğu yakalamada geçerlidir (dpr 2 + zoom %50).
   Yakalamadan sonra bilinen bir elemanın PNG içindeki kutusunu ölçüp **doğrula** ve
