@@ -1,0 +1,13 @@
+<!doctype html><html><head><meta charset="utf-8"><title>uzun</title>
+<style>
+  body { margin: 0 }
+  /* Dikeyde taşar VE kaydırma çubuğu KLASİK olmaya zorlanır.
+     Headless Chrome varsayılan olarak overlay kaydırma çubuğu kullanır (yer kaplamaz);
+     `::-webkit-scrollbar`a açık genişlik vermek onu layout'tan yer alan klasik
+     çubuğa çevirir. Telafi dalı ancak böyle deterministik olarak sınanabilir. */
+  html::-webkit-scrollbar { width: 15px }
+  html::-webkit-scrollbar-thumb { background: #888 }
+  #uzun { height: 4000px; background: #FAFAFA }
+  #bar { width: 100%; height: 72px; background: #0C2380 }
+</style></head>
+<body><div id="uzun"><div id="bar" data-testid="bar"></div></div></body></html>

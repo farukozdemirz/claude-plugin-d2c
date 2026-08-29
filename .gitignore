@@ -2,3 +2,10 @@
 # Diskte durur, repoya girmez.
 fixtures/benchmark.json
 fixtures/acceptance-test.md
+
+# Implementasyon çalışma kaydı — repoya girmez.
+/.d2c-work/
+
+# Canlı AGC fixture'ları tasarım dosyasına özel (benchmark.json ile aynı politika).
+cli/node_modules/
+cli/test/fixtures/canli/

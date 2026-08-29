@@ -1,0 +1,74 @@
+{
+  "ayni": {
+    "ham": 0,
+    "yapisal": 0,
+    "boyut": [
+      344,
+      224
+    ],
+    "bolge": 0
+  },
+  "renk": {
+    "ham": 2.7577,
+    "yapisal": 3.3015,
+    "boyut": [
+      344,
+      224
+    ],
+    "bolge": 4
+  },
+  "ellipsis": {
+    "ham": 0.0156,
+    "yapisal": 0,
+    "boyut": [
+      344,
+      224
+    ],
+    "bolge": 1
+  },
+  "kayma": {
+    "ham": 0.1246,
+    "yapisal": 0.4983,
+    "boyut": [
+      344,
+      224
+    ],
+    "bolge": 4
+  },
+  "fotosuz": {
+    "ham": 15.4485,
+    "yapisal": 15.4485,
+    "boyut": [
+      344,
+      224
+    ],
+    "bolge": 16
+  },
+  "gurultu": {
+    "ham": 99.1455,
+    "yapisal": 52.8889,
+    "boyut": [
+      101,
+      73
+    ],
+    "bolge": 64
+  },
+  "olcek": {
+    "ham": 4.8575,
+    "yapisal": 2.7201,
+    "boyut": [
+      344,
+      224
+    ],
+    "bolge": 34
+  },
+  "kirpma": {
+    "ham": 19.387,
+    "yapisal": 26.0741,
+    "boyut": [
+      300,
+      180
+    ],
+    "bolge": 37
+  }
+}
