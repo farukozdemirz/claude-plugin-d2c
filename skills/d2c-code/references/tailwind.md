@@ -21,7 +21,7 @@ Tahminle yazılan Tailwind tasarımı tutturmaz. Aşağıdakiler bunun neden old
   ekranları etkiler. Rapora "eklenmesi önerilen token" listesi yaz:
   ```css
   @theme {
-    --color-marka-lacivert: #0C2380;   /* -> bg-marka-lacivert, text-marka-lacivert */
+    --color-brand-navy: #0C2380;   /* -> bg-brand-navy, text-brand-navy */
   }
   ```
 
@@ -72,7 +72,7 @@ sınıf, bileşenin kendi `p-6`'sıyla çakışır ve hangisinin kazanacağı CS
 
 ```tsx
 import { twMerge } from 'tailwind-merge'
-export function Kart({ className, ...props }: Props) {
+export function Card({ className, ...props }: Props) {
   return <div className={twMerge('rounded-xl border p-6', className)} {...props} />
 }
 ```
@@ -107,9 +107,9 @@ node "$D2C_ROOT/cli/dist/d2c.mjs" xd assets "<xd link>" --screen "<ekran>" \
   --out-dir public/d2c
 ```
 
-- **İkonlar** gerçek SVG olarak çıkar (`public/d2c/ikon/`). Yol verisi kaynaktan
+- **İkonlar** gerçek SVG olarak çıkar (`public/d2c/icon/`). Yol verisi kaynaktan
   birebir; **yaklaşık çizme yok**. Özdeş ikonlar tek dosyaya iner.
-- **Görseller** `public/d2c/gorsel/` altına iner (genelde WebP).
+- **Görseller** `public/d2c/image/` altına iner (genelde WebP).
   `olcekDavranisi: "fill"` → `object-fit: cover`.
 - **Atlananlar raporlanır**: gradient dolgu ve clipPath maskesi hâlâ çevrilemiyor.
   Rapordaki her kalem için `{/* TODO */}` bırak — sessizce geçme.

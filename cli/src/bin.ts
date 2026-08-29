@@ -464,11 +464,11 @@ async function cmdAssets(args: Args): Promise<number> {
   const agc = await fetchComponentJson<Record<string, unknown>>(proto, cid, CONTENT_TYPES.agc);
   const { elemanlar } = flatten(agc);
 
-  const svgSonuc = svgleriYaz(elemanlar, join(args.outDir, 'ikon'));
+  const svgSonuc = svgleriYaz(elemanlar, join(args.outDir, 'icon'));
   const uidler = elemanlar
     .filter((e): e is Extract<typeof e, { tip: 'gorsel' }> => e.tip === 'gorsel')
     .map((e) => e.uid).filter((u): u is string => !!u);
-  const gorselSonuc = await gorselleriIndir(proto, uidler, join(args.outDir, 'gorsel'));
+  const gorselSonuc = await gorselleriIndir(proto, uidler, join(args.outDir, 'image'));
 
   const sonuc = {
     svgler: svgSonuc.svgler,

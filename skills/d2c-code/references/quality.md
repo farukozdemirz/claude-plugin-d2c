@@ -5,20 +5,34 @@ bakımı zor veya erişilemez bir bileşen de o tablodan geçer. Aşağıdakiler
 `/code-review` çalıştırılmadan önce kendi kendine kontrol edilir, sonra review'a
 bu liste verilir.
 
-## 1. Ölçü kaynağı izlenebilir olmalı
+## 1. Ölçü kaynağı izlenebilir olmalı — **kodda değil, raporda**
 
-Kodda görünen her sayının nereden geldiği anlaşılmalı.
+Kodda görünen her sayının nereden geldiği anlaşılmalı. Ama bu **yorum satırlarıyla
+yapılmaz**: izlenebilirlik `<bolum-slug>/code.md` raporunun işidir.
 
-- Izgaraya oturmayan her arbitrary değerin (`mt-[9px]`, `w-[316px]`, `pb-[26px]`)
-  ya kendisi ya da bulunduğu blok, kaynağını söyleyen bir yorum taşımalı:
-  `/* padding: sol/sağ/üst 24, alt 26 (hesaplanan) */`
-- Yarı-satır telafisi uygulanan boşluklar **mutlaka** işaretlenmeli — `mt-[4.5px]`
-  gibi bir değer açıklamasız bırakılırsa sonraki geliştirici onu "yuvarlanmamış hata"
-  sanıp düzeltir ve hizayı bozar.
-- Bileşenin başında JSDoc bloğu: hangi XD ekranı (ad + `N/24`), artboard boyutu,
-  bileşenin XD'deki eleman adı (`Path B`, `Rectangle G`), ana ölçüler.
-  Tekrar kullanım kontrolü (bkz. SKILL.md) bu bloğu okuyor.
-- **Ölçülmemiş hiçbir değer sessiz kalmamalı.** Varsayım varsa `TODO:` + neden.
+> **KOD YORUMSUZ ÜRETİLİR.** Açıklayıcı yorum, JSDoc bloğu, "kaynak: XD ekran 4/24"
+> notu — hiçbiri bileşen dosyasına yazılmaz. Bunlar rapora gider.
+
+- **Arbitrary değerler için yorum YOK.** `mt-[9px]`, `w-[316px]`, `pb-[26px]` çıplak
+  yazılır. Nereden geldikleri `code.md`'deki ölçü tablosunda durur.
+- **Bileşen başına JSDoc bloğu YOK.** Tekrar kullanım kontrolü artık `d2c inventory`
+  ile AST üzerinden çalışıyor (export'lar, `data-testid`'ler, ölçü sınıfları);
+  JSDoc'a ihtiyacı yok.
+- **`code.md` şu üçünü taşımalı** — koddan çıkan bilgi buraya yazılır:
+  1. eleman → sınıf → ölçü tablosu (okunan / hesaplanan ayrımıyla)
+  2. **yarı-satır telafisi uygulanan her değer**, hangi elemandan türediğiyle.
+     `mt-[4.5px]` gibi bir sayı raporda da açıklanmazsa sonraki geliştirici onu
+     "yuvarlanmamış hata" sanıp düzeltir ve hizayı bozar — bu gerçekten yaşandı.
+  3. varsayım yapılan yerler ve nedeni
+
+### Tek istisna: ölçülmemiş değer
+
+**Ölçülmemiş hiçbir değer sessiz kalmamalı.** Rapor bir değeri içermiyorsa ve kod onsuz
+yazılamıyorsa, o satıra `{/* TODO: <ne ölçülmedi> */}` bırakılır ve raporda da yazılır.
+
+Bu bir açıklama değil, **eksik veri işaretidir**: uydurulmuş bir sayıyı sessizce doğru
+göstermek bu deponun en temel kuralını çiğner. Süslemek için yorum yazma; yalnız
+gerçekten eksik olanı işaretle.
 
 ## 2. Semantik ve erişilebilirlik
 
@@ -63,6 +77,11 @@ Kodda görünen her sayının nereden geldiği anlaşılmalı.
 - `data-testid` yalnız doğrulama için var; ürün kodunda davranış bağlama.
 - Aynı ikon iki bileşende kopyalanmışsa ortak bir dosyaya çıkar.
 - Dosya/dizin adlandırması projedeki mevcut düzene uymalı.
+- **Koddaki her tanımlayıcı İNGİLİZCE.** Dosya adı, bileşen adı, prop, değişken,
+  `data-testid`, CSS token adı — hepsi. Tasarım Türkçe olsa da kod İngilizce yazılır:
+  `ProductCard.tsx` / `<ProductCard>` / `data-testid="product-card"`, `UrunKarti` değil.
+  Türkçe **yalnız** kullanıcıya görünen metinlerde ve raporda kalır.
+  Bu dosyaların Türkçe yazılmış olması seni yanıltmasın — kural üretilen KOD içindir.
 
 ## 7. Review'a ne verilir
 

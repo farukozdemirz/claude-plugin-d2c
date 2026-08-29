@@ -79,8 +79,10 @@ Ekran listesini gez (`xd-viewer-notlari.md` §12) ve **ikisini de ölç**:
 node "$D2C_ROOT/cli/dist/d2c.mjs" inventory components
 ```
 
-Çıktı her bileşenin XD kaynağını, ölçülerini, `data-testid`'lerini ve 3+ bileşende
-tekrar eden gömülü hex'leri (token adayları) verir.
+Çıktı her bileşenin export'larını, ölçülerini, `data-testid`'lerini ve 3+ bileşende
+tekrar eden gömülü hex'leri (token adayları) verir. Eşleştirmeyi **`data-testid` ve
+ölçülerden** yap: kod yorumsuz üretildiği için JSDoc'ta XD kaynağı yazmıyor
+(bkz. `references/quality.md` §1). Bölümün XD kaynağı `code.md` raporunda duruyor.
 
 > **1.12.0: envanter AST tabanlı.** Eski regex script yalnız `export function` ve
 > `export const` görüyordu; sentetik bir dosyada **5 export biçiminden 1'ini**
@@ -128,7 +130,9 @@ Sonra `references/tailwind.md` kurallarına göre yaz. Bileşeni projenin mevcut
 yerleştir (App Router; `componentsDir` yoksa oluştur). Doğrulanabilmesi için bileşeni
 render eden bir sayfa rotası da lazım — yoksa `<previewDir>/<ad>-preview/page.tsx` aç.
 
-Ölçülecek elemanlara **stabil `data-testid`** ver (`data-testid="yorum-karti"`).
+Ölçülecek elemanlara **stabil `data-testid`** ver — İngilizce, kebab-case:
+`data-testid="review-card"`. (Tasarım Türkçe olsa da tanımlayıcılar İngilizce;
+bkz. `references/quality.md` §6.)
 `design-diff` bunları seçici olarak kullanacak; sınıf adlarına dayanmak kırılgan.
 
 **`testid`'leri `olcum.json`'a geri yaz.** Ölçüm fazı elemanları XD adıyla biliyor

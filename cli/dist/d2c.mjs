@@ -24058,9 +24058,9 @@ async function cmdAssets(args) {
   }
   const agc = await fetchComponentJson(proto, cid, CONTENT_TYPES.agc);
   const { elemanlar } = flatten(agc);
-  const svgSonuc = svgleriYaz(elemanlar, join6(args.outDir, "ikon"));
+  const svgSonuc = svgleriYaz(elemanlar, join6(args.outDir, "icon"));
   const uidler = elemanlar.filter((e) => e.tip === "gorsel").map((e) => e.uid).filter((u) => !!u);
-  const gorselSonuc = await gorselleriIndir(proto, uidler, join6(args.outDir, "gorsel"));
+  const gorselSonuc = await gorselleriIndir(proto, uidler, join6(args.outDir, "image"));
   const sonuc = {
     svgler: svgSonuc.svgler,
     gorseller: gorselSonuc.gorseller,
