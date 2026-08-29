@@ -16,6 +16,14 @@ Hâlâ export edilemeyenler: **gradient dolgular** ve **maske/clipPath** birleş
 İkisi de sessizce atlanmıyor — `d2c xd assets` bunları `atlananlar[]` olarak
 sebebiyle raporluyor (ölçüldü: bir ekranda 2 gradient düğümü).
 
+- ~~**Boolean şekiller (`compound`).**~~ **✅ ÇÖZÜLDÜ (1.12.1)** — XD'de birleştirilmiş
+  (union/exclude/subtract) şekiller `shape.type: "compound"` olarak geliyor ve
+  ölçülmeden **sessizce düşüyordu**. İkinci bir gerçek tasarımda yakalandı:
+  291 düğümün **10'u** compound, bilinmeyen tip oranı %3,44. `shape.path` boolean
+  işlemin sonucunu taşıyor (doğrulandı: bbox'ı çocuklarının birleşimiyle birebir),
+  yani normal bir yol gibi ölçülüyor. Oran **%0,00**'a, eleman sayısı 172 → **182**'ye çıktı.
+  SVG export'unda `fill-rule="evenodd"` veriliyor — yoksa `exclude` ile açılan delik dolardı.
+
 
 - ~~**Vektör ikonlar.**~~ **✅ ÇÖZÜLDÜ (1.10.0)** — `d2c xd assets` gerçek SVG
   üretiyor. AGC scenegraph yol verisini birebir taşıyor; yol artık *yaklaşık* değil.

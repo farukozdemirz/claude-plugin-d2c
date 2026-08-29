@@ -63,3 +63,26 @@ test('line kutuya çevrilir (ayraç çizgileri)', () => {
 test('boş path ölçülemez — null döner (uydurulmaz)', () => {
   assert.equal(measureShape({ type: 'path', path: '' }), null);
 });
+
+// ── compound (boolean birleştirilmiş şekil) ──────────────────────────────────
+test('compound şekil `path` gibi ölçülür', () => {
+  // Gerçek tasarımda bulundu: 291 düğümün 10'u compound'du ve SESSİZCE düşüyordu
+  // (bilinmeyen tip %3,44). `shape.path` boolean işlemin SONUCUNU taşıyor —
+  // doğrulandı: compound'un bbox'ı çocuklarının birleşimiyle birebir aynı.
+  const m = measureShape({
+    type: 'compound',
+    operation: 'exclude',
+    path: 'M 0 0 L 24 0 L 24 24 L 0 24 Z M 8 8 L 16 8 L 16 16 L 8 16 Z',
+    children: [],
+  });
+  assert.ok(m, 'compound ölçülmeli, null dönmemeli');
+  assert.deepEqual(
+    [m.kutu.x, m.kutu.y, m.kutu.w, m.kutu.h],
+    [0, 0, 24, 24],
+    'dış kontur kutuyu belirler'
+  );
+});
+
+test('compound `path` taşımıyorsa yine null (uydurma yok)', () => {
+  assert.equal(measureShape({ type: 'compound', operation: 'union', children: [] }), null);
+});

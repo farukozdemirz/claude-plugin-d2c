@@ -111,6 +111,9 @@ export function svgUret(grup: DuzSekil[], ad: string): { svg: string; kutu: [num
     const attrs = [
       `d="${esc(d)}"`,
       `fill="${f}"`,
+      // Boolean şekil (compound) delik içerebilir; SVG varsayılanı `nonzero` deliği
+      // DOLDURUR. XD'nin `exclude`/`subtract` sonucu ancak evenodd ile doğru çıkar.
+      ...(el.sekilTipi === 'compound' ? ['fill-rule="evenodd"'] : []),
       ...(s ? [`stroke="${s.renk}"`, `stroke-width="${s.genislik}"`] : ['stroke="none"']),
     ];
     return `  <path ${attrs.join(' ')}/>`;

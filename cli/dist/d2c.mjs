@@ -6631,7 +6631,7 @@ function measureShape(shape) {
       radiusKaynak: "yok"
     };
   }
-  if (t === "path" && typeof shape.path === "string") {
+  if ((t === "path" || t === "compound") && typeof shape.path === "string") {
     const kutu = pathBBox(shape.path);
     if (!kutu) return null;
     const r = radiusFromRoundedRectPath(shape.path);
@@ -23482,6 +23482,9 @@ function svgUret(grup, ad) {
     const attrs = [
       `d="${esc(d)}"`,
       `fill="${f}"`,
+      // Boolean şekil (compound) delik içerebilir; SVG varsayılanı `nonzero` deliği
+      // DOLDURUR. XD'nin `exclude`/`subtract` sonucu ancak evenodd ile doğru çıkar.
+      ...el.sekilTipi === "compound" ? ['fill-rule="evenodd"'] : [],
       ...s ? [`stroke="${s.renk}"`, `stroke-width="${s.genislik}"`] : ['stroke="none"']
     ];
     return `  <path ${attrs.join(" ")}/>`;

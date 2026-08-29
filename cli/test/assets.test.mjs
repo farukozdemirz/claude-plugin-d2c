@@ -136,3 +136,19 @@ if (!existsSync(FIX)) {
     assert.ok(r.atlananlar.every((a) => a.sebep), 'her atlanan bir sebep taşımalı');
   });
 }
+
+// ── compound → fill-rule ─────────────────────────────────────────────────────
+test('compound SVG i evenodd ile çıkar (delik dolmasın)', () => {
+  // XD `exclude`/`subtract` sonucu tek bir path'te iki kontur olarak gelir.
+  // SVG varsayılanı `nonzero` deliği DOLDURUR — donut şekli dolu daire görünürdü.
+  const r = svgUret([sekil({
+    sekilTipi: 'compound',
+    yol: 'M 0 0 L 24 0 L 24 24 L 0 24 Z M 8 8 L 16 8 L 16 16 L 8 16 Z',
+  })], 'delikli');
+  assert.match(r.svg, /fill-rule="evenodd"/);
+});
+
+test('normal path a fill-rule EKLENMEZ', () => {
+  const r = svgUret([sekil()], 'ikon');
+  assert.ok(!r.svg.includes('fill-rule'), 'gereksiz nitelik eklenmemeli');
+});

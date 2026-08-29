@@ -98,7 +98,11 @@ export function measureShape(shape: Record<string, any>): SekilOlcu | null {
       radiusKaynak: 'yok',
     };
   }
-  if (t === 'path' && typeof shape.path === 'string') {
+  // `compound` = boolean birleştirilmiş şekil. `shape.path` işlemin SONUCUNU taşıyor
+  // (doğrulandı: compound'un kendi bbox'ı çocuklarının birleşimiyle birebir aynı),
+  // yani `path` ile aynı şekilde ölçülür. Ayrılmasaydı bu şekiller sessizce düşerdi
+  // — gerçek bir tasarımda 291 düğümün 10'u compound çıktı.
+  if ((t === 'path' || t === 'compound') && typeof shape.path === 'string') {
     const kutu = pathBBox(shape.path);
     if (!kutu) return null;
     const r = radiusFromRoundedRectPath(shape.path);
