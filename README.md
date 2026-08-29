@@ -8,19 +8,22 @@ kod tarayıcıda render edilip **tekrar ölçülerek** tasarımla karşılaştı
 ```
 /d2c <xd-link>
    │
-   ├─ önkoşul kontrolü (MCP · agent kaydı · PIL · .d2c.json · fontlar · kilit)
-   ├─ ekran seç (desktop + mobil artboard)
-   ├─ BÖLÜM HARİTASI (tam genişlik bant taraması + boş satır analizi)
+   ├─ önkoşul (Node · .d2c.json · fontlar)        ← MCP artık GEREKMİYOR
+   ├─ xd extract   → design.json   (HTTP + AGC scenegraph, ~1 sn, tarayıcı yok)
+   ├─ sections     → bölüm haritası (probe/kalibrasyon/screenshot yok, ~1 ms)
    │
    └─ her bölüm için:
-        ├─ ölç (spec paneli)               → spec.md
+        ├─ spec          → olcum.json + spec.md   (Claude'un TEK girdisi)
         ├─ bileşen envanteri ("zaten var mı?")
         ├─ Tailwind + React üret
-        ├─ design-diff  → render edip ÖLÇ
-        ├─ visual-diff  → render edip piksel karşılaştır
-        ├─ /code-review → kalite çıtası
-        └─ regresyon ölçümü               → code.md + runs.jsonl
+        ├─ render verify → verification.json      (Playwright, ~1,3 sn)
+        ├─ visual diff   → visual.json + hazır kırpmalar (~2,7 sn)
+        ├─ /code-review  → kalite çıtası
+        └─ regresyon                              → code.md + runs.jsonl
 ```
+
+Ölçüm artık XD viewer'ı hiç açmıyor: paylaşım linkinin kendi verdiği scenegraph
+düz HTTP ile okunuyor. Ölçülen kazanç ve yöntem: [docs/benchmark.md](docs/benchmark.md).
 
 ## Komutlar
 
@@ -30,6 +33,18 @@ kod tarayıcıda render edilip **tekrar ölçülerek** tasarımla karşılaştı
 | `/d2c-spec <link> [bölüm]` | Yalnız ölçüm |
 | `/d2c-code <link\|rapor> <bölüm>` | Yalnız kod + doğrulama |
 | `/d2c-verify <bileşen\|rota>` | Mevcut kodu yeniden doğrular |
+
+Skill'lerin altında çalışan CLI doğrudan da kullanılabilir
+(`node "$D2C_ROOT/cli/dist/d2c.mjs" --help`):
+
+| Komut | Ne yapar |
+|---|---|
+| `doctor` | önkoşul kontrolü |
+| `xd inspect <link>` | ekran listesi + sözleşme sağlığı |
+| `xd smoke <link>` | canlı sözleşme kontrolü — bozulduğunda çıkış kodu 1 (haftalık CI) |
+| `inventory [dizin]` | mevcut bileşen envanteri (AST) — "bu zaten var mı?" |
+
+Her komut `--verbose` (süre özeti) ve `--trace <dosya>` (JSON) kabul eder.
 
 ## Kurulum
 
@@ -41,7 +56,7 @@ claude plugin install d2c@d2c-marketplace
 Sonra **Claude Code'u yeniden başlat** — agent'lar ve skill'ler oturum başında kayda giriyor.
 
 Bu repo hem plugin hem kendi katalogu; ayrı bir marketplace reposu gerekmiyor.
-Önkoşullar (chrome-devtools MCP, Python + PIL, `.d2c.json`, fontlar) ve
+Önkoşullar (Node, opsiyonel Playwright, `.d2c.json`, fontlar) ve
 proje konfigürasyonu: [docs/installation.md](docs/installation.md)
 
 ## Bir şeyler ters gittiğinde
@@ -60,7 +75,7 @@ plugin sürümü artırılır — herkese yayılır.
 
 | Dosya | İçerik |
 |---|---|
-| `skills/d2c-spec/references/playbook.md` | XD'yi tarayıcıda sürmenin 23 doğrulanmış maddesi |
+| `docs/xd-viewer-notlari.md` | XD'yi tarayıcıda sürmenin 23 doğrulanmış maddesi |
 | `skills/d2c-code/references/tailwind.md` | Kod üretim kuralları (yarı-satır telafisi, font kökü, scrollbar…) |
 | `skills/d2c-code/references/quality.md` | Üretilen bileşenin geçmesi gereken çıta |
 | `skills/d2c/references/segmentation.md` | Ekran ayrıştırma yöntemi |

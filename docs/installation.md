@@ -2,10 +2,24 @@
 
 ## Önkoşullar
 
-### 1. chrome-devtools MCP (zorunlu)
+### 0. Node 18+ (zorunlu)
 
-Tüm ölçüm bunun üzerinden yapılıyor. XD viewer bir SPA ve artboard `<canvas>`'a
-çiziliyor — `WebFetch`/`curl` hiçbir şey döndürmez.
+Ölçüm artık `cli/dist/d2c.mjs` üzerinden, **tarayıcısız** yapılıyor. Bundle depoda
+hazır; `npm install` gerekmez.
+
+```bash
+node "$D2C_ROOT/cli/dist/d2c.mjs" doctor
+```
+
+### 1. chrome-devtools MCP (doğrulama için zorunlu)
+
+**Ölçüm için artık gerekmiyor.** Gerekli olduğu yerler:
+- `design-diff` ve `visual-diff` doğrulama ajanları (M2/M3'te deterministik olacak)
+- `extractorStrategy: "legacy"` ile çıkarma
+
+> Not: XD viewer bir SPA ve artboard `<canvas>`'a çizilir — DOM'da içerik yoktur.
+> Ama canvas'a çizilen verinin **kaynağı** düz HTTP ile alınabiliyor; ölçüm yolu
+> bunu kullanıyor.
 
 ```bash
 claude mcp add chrome-devtools -- npx -y chrome-devtools-mcp@latest --isolated
@@ -30,22 +44,47 @@ claude mcp add chrome-devtools -- npx -y chrome-devtools-mcp@latest --isolated
 
 Doğrula: yeni bir oturumda `mcp__chrome-devtools__list_pages` çağrılabiliyor olmalı.
 
-### 2. Python 3 + Pillow (zorunlu)
+### 2. Playwright (doğrulama için)
 
-`visual-diff.py` (piksel karşılaştırma) ve `section-map.py` (ekran ayrıştırma)
-bunsuz çalışmaz.
+`render verify` ve `visual diff` sistemdeki Chrome'u kullanır — **binary indirmez**.
 
 ```bash
-python3 -c "import PIL; print(PIL.__version__)"   # boş dönerse:
-pip install Pillow
+npm i -D playwright-core     # hedef projede
 ```
 
-### 3. Node + proje (zorunlu)
+Yoksa ölçüm (`xd extract` / `sections` / `spec`) **yine çalışır**; yalnız doğrulama
+komutları çalışmaz. `d2c doctor` durumu söyler.
+
+### 3. Python — **artık zorunlu değil** (1.11.0)
+
+**Pillow (PIL) normal akışta hiç gerekmiyor.** Görsel karşılaştırma 1.11.0'da
+TypeScript'e taşındı ve piksel düzeyinde PIL ile eşdeğerliği kanıtlandı
+(8 durumda ham/yapısal fark **tam 0**; ısı haritası ve kırpmalar bayt bayt aynı).
+Kod `cli/dist/d2c.mjs` içine gömülü — kurulacak bir şey yok.
+
+**1.12.0'dan beri normal akışta `python3` de hiç çağrılmıyor.** Bileşen envanteri
+`d2c inventory`'ye (AST tabanlı, bundle'da) taşındı.
+
+Kalan Python script'leri yalnız **isteğe bağlı yollarda**, ikisi de Pillow istiyor:
+
+| Script | Ne zaman | PIL? |
+|---|---|---|
+| `section-map.py` | **yalnız** `extractorStrategy: "legacy"` | evet |
+| `visual-diff.py` | **yalnız** `visual diff --motor python` / `--kalibre` | evet |
+| `component-inventory.py` | artık çağrılmıyor — geri dönüş olarak duruyor | hayır (stdlib) |
+
+Yani: Python'u yalnız *legacy yolu* ya da *çapa geri dönüşü* kullanacaksan kur.
+
+```bash
+pip install Pillow     # yalnız legacy / --kalibre için
+```
+
+### 4. Node + proje (zorunlu)
 
 Doğrulama, üretilen kodu gerçek bir dev server'da render edip ölçüyor. Hedef proje
 çalışır durumda olmalı (`npm run dev` açılabilmeli).
 
-### 4. Tasarımın fontları (zorunlu değil ama şiddetle önerilir)
+### 5. Tasarımın fontları (zorunlu değil ama şiddetle önerilir)
 
 Fontlar projede yüklü değilse **metin ölçüleri kayar**. Araç bunu tespit edip uyarır
 ama kutu ölçüleri dışındaki her şey güvenilmez olur. `next/font/local` ile bağlayın.
@@ -111,11 +150,18 @@ Her projede kök dizinde `.d2c.json`. Yoksa `/d2c` ilk çalıştırmada sorup ol
   "previewDir": "app",
   "devCommand": "npm run dev",
   "devPort": 3005,
-  "fonts": ["Bw Modelica", "Tobias"],
+  "fonts": ["<tasarımın gövde fontu>", "<tasarımın başlık fontu>"],
+  // XD spec panelinin gösterdiği aile adları — projede YÜKLÜ olmalı,
+  // yoksa metin ölçüleri sessizce kayar (önkoşul #6 bunu yakalar).
   "reportDir": "docs/d2c",
-  "writeAllowlist": ["components/**", "app/**", "docs/d2c/**"]
+  "writeAllowlist": ["components/**", "app/**", "docs/d2c/**"],
+  "extractorStrategy": "auto"
 }
 ```
+
+`extractorStrategy`: **`auto`** (varsayılan) ağ yolunu kullanır, sözleşme bozuksa
+teşhisle durur · **`network`** yalnız ağ · **`legacy`** 1.4.0 davranışı
+(chrome-devtools MCP + playbook probe yöntemi). Legacy yol korunuyor.
 
 Tailwind v3 kullanıyorsanız: `"styling": { "tailwind": 3, "config": "tailwind.config.js" }`
 

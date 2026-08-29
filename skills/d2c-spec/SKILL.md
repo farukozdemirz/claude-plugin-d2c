@@ -1,122 +1,133 @@
 ---
 name: d2c-spec
-description: "Adobe XD view/specs linkini chrome-devtools MCP ile tarayıcıda açar; ekran/renk/tipografi çıkarır, istenen elemanları tıklayıp spec panelinden ölçer."
+description: "Adobe XD view/specs linkinden ekran ve bölüm ölçümlerini çıkarır; olcum.json + spec.md üretir. Varsayılan yol tarayıcısızdır (ağ tabanlı); legacy yol chrome-devtools MCP ile çalışmaya devam eder."
 argument-hint: <xd-link> [ne ölçüleceği]
 ---
 
 # d2c-spec
 
-Adobe XD paylaşım linkini gerçek tarayıcıda açıp tasarımı ölçer.
+XD paylaşım linkinden ölçüm çıkarır. **Argüman:** ilk kelime XD linki, kalanı serbest
+görev tarifi (opsiyonel).
 
-**Argüman:** ilk kelime XD linki, kalanı serbest görev tarifi (opsiyonel).
-Örnek: `/d2c-spec https://xd.adobe.com/view/.../specs/ "yorum kartının padding değerleri"`
+## Hangi yol
 
-## İlk iş
+`.d2c.json` içindeki `extractorStrategy` belirler (varsayılan `auto`):
 
-`references/playbook.md`'yi oku. Oradaki yöntemler gerçek bir oturumda doğrulanmıştır —
-alternatiflerini deneme (özellikle WebFetch/curl, MCP `click`, klavye/scroll pan).
+| Değer | Davranış |
+|---|---|
+| `auto` (varsayılan) | Ağ yolu. Sözleşme bozuksa **teşhisle durur** ve legacy'ye geçmeyi önerir |
+| `network` | Yalnız ağ yolu |
+| `legacy` | 1.4.0 davranışı: chrome-devtools MCP + `$D2C_ROOT/docs/xd-viewer-notlari.md` |
 
-## Akış
+---
 
-1. **Önkoşul.** chrome-devtools MCP araçları (`mcp__chrome-devtools__*`) yoksa kullanıcıya
-   şu komutu söyle ve **dur**:
-   ```
-   claude mcp add chrome-devtools -- npx -y chrome-devtools-mcp@latest --isolated
-   ```
-2. **Aç ve hazırla.** Linki aç, diyalogları kapat, geniş viewport ayarla (playbook §2-4).
-3. **Snapshot.** `take_snapshot` ile ekran kimliği + renk paleti + character styles çıkar (§5).
-4. **Görev tarifi YOKSA:** genel rapor üret — ekran listesi (§12) + palet + tipografi +
-   düşük zoom'da (%22-25) ekran görüntüsünden bölüm listesi — ve kullanıcıya hangi bölümü
-   ölçmek istediğini sor.
-5. **Görev tarifi VARSA — kalibre et.** Bölgeye pan/zoom yapmak için **deneme-yanılma
-   ETME**: playbook **§24**'teki tek çağrılık kalibrasyon rutinini kullan. Zoom'u ayarlar,
-   hedefi bulur, kenarları ikili aramayla çözer, eşlemeyi döndürür. Eşlemeyi hemen ikinci
-   bir elemanla doğrula.
-6. **Ölç.** Elemanları tıklayıp panelden oku (§8-11), boşlukları kutu koordinatlarından
-   hesapla (§14). Probe'ları **toplu** yap — tek `evaluate_script` içinde çok nokta
-   (§10); her araç çağrısı ~15 sn model gecikmesi demek.
-7. **Referansı BURADA yakala.** Tarayıcı zaten doğru artboard'da ve doğru zoom'da.
-   Playbook §23'e göre dpr 2 + zoom %50 ayarla, **seçimi kaldır** (artboard dışına tıkla —
-   XD seçili elemanı magenta ana hatla çiziyor ve köşe ölçümünü bozuyor), PNG'ye al:
-   `<reportDir>/<bolum-slug>/xd-<viewport>.png`. Kod fazı bunu yeniden yakalamayacak.
-8. **Raporla — iki dosya.** Repo köküne yazma.
-   - `<reportDir>/<bolum-slug>/spec.md` — insan için (aşağıdaki format)
-   - `<reportDir>/<bolum-slug>/olcum.json` — **sonraki fazlar için** (aşağıdaki şema)
+## Ağ yolu (varsayılan) — tarayıcı YOK
 
-   Tek başına çağrıldıysa ve bölüm belli değilse `<reportDir>/spec.md`.
+Üç komut. Ölçüm için XD viewer açılmaz, tıklama yapılmaz, kalibrasyon gerekmez.
 
-## `olcum.json` — fazlar arası durum sözleşmesi
+```bash
+D2C="$D2C_ROOT/cli/dist/d2c.mjs"          # kök çözümü için aşağıya bak
+R="<reportDir>"                            # .d2c.json'dan
 
-**Bu dosya olmadan sonraki fazlar aynı işi baştan yapar.** `/d2c-code` §4b XD'ye geri
-dönüp konumlandırma yapar, `visual-diff` çapayı yeniden türetir; ölçülen maliyet
-bölüm başına **~15 araç çağrısı ≈ 4 dakika**.
+# 1) ekranı çıkar (desktop + mobil birlikte, ~1 sn)
+node "$D2C" xd extract "<xd-link>" --screen "<ekran adı|id>" -o "$R/design.json"
 
-```jsonc
-{
-  "ekran":    { "ad": "…", "sayac": "8 of 24", "screen_id": "…", "mobil_screen_id": "…" },
-  "artboard": { "desktop": [1440, 1494], "mobil": [375, 1064] },
-  "kalibrasyon": {                        // playbook §24'ün döndürdüğü değerler
-    "desktop": { "zoom": 50, "solV": 267, "ustV": 314, "olcek": 0.5, "hedef": "artboard" },
-    "mobil":   { "zoom": 75, "solV": 467, "ustV": 297, "olcek": 0.75, "hedef": "artboard" }
-  },
-  "bolum_kutu": { "desktop": [940, 0, 500, 1080], "mobil": [0, 0, 375, 1080] },
-  "referans": {
-    "desktop": {
-      "png": "xd-desktop.png",            // <reportDir>/<slug>/ altında
-      "dpr": 2, "zoom": 50,
-      "esleme": { "dx": 534, "dy": 628 }, // cihaz_px = (dx + tasarim_x, dy + tasarim_y)
-      "kirpma": [1474, 628, 500, 1080]    // bölümün referans PNG içindeki kutusu
-    }
-  },
-  "capa": { "hex": "#0C2380", "tasarim_kutu": [972, 939.13, 436, 64] },
+# 2) bölüm haritası
+node "$D2C" sections --design "$R/design.json" --json -o "$R/bolum-haritasi.json"
 
-  "elemanlar": [
-    {
-      "ad": "Rectangle 7931",          // XD panelindeki eleman adı
-      "rol": "panel",                  // insan için kısa etiket
-      "testid": null,                  // KOD FAZI doldurur (d2c-code §3)
-      "desktop": { "kutu": [940,0,500,1080], "radius": 24, "radius_kaynak": "P",
-                   "renk": "#FFFFFF", "padding": 32 },
-      "mobil":   { "kutu": [0,0,375,1080], "radius": 0, "padding": 24 }
-    },
-    {
-      "ad": "Text : Ürünü Değerlendir", "rol": "baslik", "testid": null,
-      "font": { "aile": "Tobias TRIAL", "agirlik": "Light", "punto": 28,
-                "satir": 32, "ls": 0, "renk": "#0C2380" },
-      "desktop": { "kutu": [972, 92, 223, 32] },
-      "mobil":   { "kutu": [24, 80, 223, 32] }
-    }
-  ],
-  "hesaplanan": [
-    { "ne": "panel padding", "deger": 32, "nasil": "baslik.x(972) − panel.x(940)" }
-  ],
-  "cozulemedi": []
-}
+# 3) seçilen bölümün ölçümü → olcum.json + spec.md
+node "$D2C" spec --design "$R/design.json" --section <no|slug> --out-dir "$R/<bolum-slug>"
 ```
 
-- **`elemanlar[]` ölçülen HER elemanı içerir** — `design-diff` hedef tablosunu buradan
-  okuyacak, prompt'a elle transkribe edilmeyecek. Elle yazmak hem prompt'u şişiriyor
-  hem de sessiz transkripsiyon hatası riski taşıyor (yanlış yazarsan ajan yanlış şeyi
-  doğrular, kimse fark etmez).
-- **`radius_kaynak`**: `P` panelden · `Ö` pikselden · `H` hesaplanan. `Path`
-  elemanlarında panel radius vermez (playbook §16) — `Ö` ise ölçüm kanıtını
-  `spec.md`'ye yaz.
-- **`testid` başta `null`.** Kod fazı doldurur (`d2c-code` §3); doldurulmadan
-  `design-diff` bu dosyayı kullanamaz.
+Ekran adını bilmiyorsan önce listele: `node "$D2C" xd inspect "<xd-link>"`
 
-- `esleme` **1 tasarım px = 1 cihaz px** olduğu yakalamada geçerlidir (dpr 2 + zoom %50).
-  Yakalamadan sonra bilinen bir elemanın PNG içindeki kutusunu ölçüp **doğrula** ve
-  doğrulamayı `spec.md`'ye yaz.
-- `capa`: bölüm içindeki **benzersiz renkli, dolu, geniş** eleman. Ekranda ona yakın
-  başka bir renk varsa (kampanya banner'ı gibi) `kirpma` zaten hazır olduğu için
-  `visual-diff` çapayı hiç türetmeyecek — sorun çıkmaz.
+### Çıktılar ve **kim neyi okur**
 
-## Rapor formatı
+| Dosya | Kim okur |
+|---|---|
+| `design.json` | **Yalnız araçlar.** Tam scenegraph, ekran başına yüzlerce KB. **Claude bunu AÇMAZ.** |
+| `olcum.json` | **Claude.** Bölüm kapsamlı, kendi içinde yeterli: kutu · spacing · radius · renk · kontur · tipografi · metin · eleman ilişkileri |
+| `spec.md` | İnsan |
 
-- **Ekran:** ad, "N of M", viewport/design size
-- **Renk paleti** (hex — snapshot'tan, screenshot'tan DEĞİL)
-- **Character styles:** aile / ağırlık / px / renk
-- **Ölçülen elemanlar tablosu:** eleman | x | y | w×h | radius | renk/border | font
-- **Hesaplanan boşluklar**, hangi iki kutudan türetildiğiyle:
-  ör. `kart sol padding 24 = metin.x(87.5) − kart.x(63.5)`
-- Panelden **OKUNAN** ile **HESAPLANAN** değerleri ayrı işaretle.
+Bu sınır değişmez. `design.json`'ı bağlama sokmak, ölçüm maliyetini araç çağrısından
+token'a taşımak olur — sorunu çözmek değil, yer değiştirmek.
+
+### `olcum.json` hakkında bilinmesi gerekenler
+
+- **`testid` başta `null`.** Kod fazı doldurur (`d2c-code` §3). Doldurulmadan
+  doğrulama ajanı bu dosyayı kullanamaz.
+- **`d2c spec` yeniden çalıştırılırsa `testid`'ler korunur** — eleman `id`'sine göre
+  taşınır. Sıfırlamak için `--force`. Taşınamayan varsa `cozulemedi`'ye yazılır.
+- **`tekrar` alanı sıkıştırılmış diziyi anlatır:** `adet` · düzenliyse `eksen`+`adim`
+  (veya ızgarada `sutun`/`satir`/`adimX`/`adimY`), düzensizse `duzenli:false` +
+  `konumlar` (tüm konumlar korunur, bilgi kaybı yok). 8 özdeş kart tek kayıt olur.
+- **`hesaplanan`** boşlukları **adım başına bir kez** verir ve her kayıt `nasil`
+  alanıyla kaynağını söyler.
+- **`font.fontKutusuAgc` HAM AGC değeridir ve KULLANILMAZ.** `fontKutusuKaynak`
+  `"tarayici"` gelir, `yariSatir` `null`'dur: yarı-satır telafisi için font kutusu
+  **kod fazında tarayıcıda ölçülür** (`d2c-code` §3). Ölçüldü — AGC değeri Bw Modelica'da
+  Chrome ile birebir tutuyor ama Tobias TRIAL 48px'te 10px sapıyor ve yarı-satırın
+  işaretini değiştiriyor.
+- Radius kaynağı `rect` veya `yol` ise kaynak veriden birebir gelmiştir (`P` sayılır).
+  `bilinmiyor` ise **çıkarılamamıştır** — uydurulmamıştır, raporda öyle geçer.
+
+### Sözleşme bozulursa
+
+`xd inspect` / `xd extract` teşhisle durur. İki durum ayrıdır:
+
+- **"XD linki geçersiz veya erişilemiyor"** → link yazım hatası, kaldırılmış paylaşım
+  veya public olmayan link. Kullanıcıya sor.
+- **"XD paylaşım sözleşmesi değişmiş olabilir"** → Adobe tarafı değişmiş.
+  `extractorStrategy: "legacy"` ile aşağıdaki yola geç ve durumu bildir.
+
+---
+
+## Legacy yol — chrome-devtools MCP  *(korunuyor)*
+
+`extractorStrategy: "legacy"` ise veya ağ yolu sözleşme hatası verdiyse kullanılır.
+
+**İlk iş:** `$D2C_ROOT/docs/xd-viewer-notlari.md`'yi oku. Oradaki 25 madde gerçek bir oturumda
+doğrulanmıştır — alternatiflerini deneme (özellikle MCP `click`, klavye/scroll pan).
+
+1. **Önkoşul.** `mcp__chrome-devtools__*` yoksa dur ve söyle:
+   `claude mcp add chrome-devtools -- npx -y chrome-devtools-mcp@latest --isolated`
+2. **Aç ve hazırla** (`xd-viewer-notlari.md` §2-4) → **snapshot** (§5) → **kalibrasyon** (§24, tek çağrı)
+3. **Ölç** — elemanları tıklayıp panelden oku (§8-11), boşlukları kutu farkından
+   hesapla (§14), probe'ları **toplu** yap (§10)
+4. **Referansı burada yakala** (§23): dpr 2 + zoom %50, **seçimi kaldır**, PNG'ye al
+5. **Raporla** — aynı iki dosya: `olcum.json` + `spec.md`
+
+> Legacy yolda `olcum.json` elle doldurulur; şeması ağ yolununkiyle aynıdır
+> (`cli/src/contracts/olcum.ts`). `kalibrasyon` ve `referans` alanları bu yolda
+> anlamlıdır ve doldurulmalıdır.
+
+---
+
+## Görsel referans
+
+**Ağ yolunda burada bir şey yapman gerekmiyor.** `d2c visual diff` referansı
+manifest'teki artboard thumbnail'ından **HTTP ile** indiriyor; ölçek tam 0,5 olduğu
+için kalibrasyon çapası türetilmiyor ve XD viewer açılmıyor.
+
+Legacy yolda referans hâlâ elle yakalanır (`xd-viewer-notlari.md` §23: dpr 2 +
+zoom %50, seçimi kaldır) ve `olcum.json`'daki `referans` alanına yazılır.
+
+## Script yolları
+
+```bash
+D2C_ROOT="${CLAUDE_PLUGIN_ROOT:-}"
+if [ -z "$D2C_ROOT" ]; then
+  for c in $(ls -d "$HOME"/.claude/plugins/cache/*/d2c/*/ 2>/dev/null | sort -Vr) \
+           "$HOME"/.claude/plugins/*/d2c "$HOME"/.claude/skills/d2c ./.claude; do
+    [ -f "$c/cli/dist/d2c.mjs" ] && D2C_ROOT="${c%/}" && break
+  done
+fi
+[ -z "$D2C_ROOT" ] && echo "HATA: plugin kökü bulunamadı" && exit 1
+```
+
+## Rapor formatı (`spec.md`)
+
+Ağ yolunda otomatik üretilir. Legacy yolda elle yazılır; içerik aynı olmalı:
+ekran · renk paleti · character styles · ölçülen elemanlar tablosu · hesaplanan
+boşluklar (hangi iki kutudan türediğiyle) · kabul edilen sapmalar · çözülemedi.
+**Okunan ile hesaplanan ayrı işaretlenir.**

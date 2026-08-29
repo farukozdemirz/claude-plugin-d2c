@@ -9,6 +9,44 @@ tools: Bash, Read, Glob, Grep, mcp__chrome-devtools__*
 `design-diff` kutuların **ölçüsünü** doğrular. Sen kutuların **içini** doğrularsın:
 yanlış ikon, placeholder görsel, fazladan ellipsis, eksik gölge, yanlış hizalanmış glif.
 
+## Önce: karşılaştırmayı ÇALIŞTIR
+
+```bash
+node "$D2C_ROOT/cli/dist/d2c.mjs" visual diff \
+  --olcum "<reportDir>/<bolum>/olcum.json" \
+  --xd-url "<xd link>" --screen "<ekran adı>" \
+  --url "<render url>" --testid "<bölüm testid>" \
+  --out-dir "<reportDir>/<bolum>/gorsel"
+```
+
+Tek çağrı. Referans indirme, render yakalama, viewport doğrulaması, piksel
+karşılaştırma **ve en sapan ≤4 bölgenin hazır kırpması** — hepsi içinde.
+Ölçülen: **~2,7 sn** (eskiden tur başına ortanca 56 araç çağrısı / 960 sn).
+
+Referans, manifest'teki artboard thumbnail'ından **HTTP ile** iniyor; XD viewer
+açılmıyor, kalibrasyon çapası türetilmiyor (ölçek tam biliniyor). Tam çözünürlük
+gerekirse `--kalibre "HEX:x,y,w,h"` yolu **korunuyor**.
+
+## Sonra: BAK ve ne gördüğünü söyle
+
+`visual.json` her sapan bölge için hazır bir kırpma veriyor: **sol XD · sağ render**,
+okunur boyuta büyütülmüş. Senin işin bunlara `Read` ile bakmak.
+
+**En fazla 4 bölge** incelenir — bütçe komutta zaten uygulanıyor. Bütçe dışı bölgeler
+`visual.json`'da **görünür kalır** (kırpması yoktur); yetmiyorsa raporda söyle,
+sessizce devam etme.
+
+> Yüzde bir geçme notu **değil**. XD metni kendi rasterizer'ıyla, tarayıcı kendi
+> hinting'iyle çiziyor — metin ağırlıklı bölümde taban %5-10. `visual.json`'daki
+> `notlar` alanını oku: referans yarı çözünürlükteyse orada yazar.
+
+---
+
+## Legacy — elle yakalama ve kırpma  *(korunuyor)*
+
+`playwright-core` yoksa ya da tam çözünürlük gerekiyorsa aşağıdaki klasik akış
+geçerlidir. **Bu bölüm kaldırılmadı.**
+
 Doğrulanmış: üç ekran da sayısal olarak "sapan yok" verdi; ilk görsel karşılaştırma
 `line-clamp-3`'ün eklediği `…` karakterini hemen yakaladı. Senin varlık sebebin bu.
 
@@ -125,3 +163,12 @@ ham fark %X · yapısal fark %Y  (taban ~%5-10, mutlak değer değil)
 ```
 
 Aksiyon gerektiren yoksa "yok" yaz. Dev server'ı sen başlattıysan kapat.
+
+**Son satır — tur maliyeti.** Çıktının en sonuna bu turda kaç araç çağrısı yaptığını yaz:
+
+```
+Tur maliyeti: N araç çağrısı
+```
+
+Ölçülen taban: tur başına **ortanca 56 çağrı** ve **~16 dk** — bu boru hattındaki en
+pahalı tek adım. Bütçeyi (§3: en fazla 4 bölge) aştıysan sebebini yaz.

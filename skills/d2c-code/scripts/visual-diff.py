@@ -130,6 +130,10 @@ ap.add_argument("--anchor", default=None)
 ap.add_argument("--kalibre", default=None)
 ap.add_argument("--tasarim-kutu", dest="tasarim_kutu", default=None)
 ap.add_argument("--render-kutu", dest="render_kutu", default=None)
+ap.add_argument("--xd-kutu", dest="xd_kutu", default=None,
+                help="XD görüntüsünden kırpılacak PİKSEL kutusu. Ölçek zaten biliniyorsa "
+                     "(ör. manifest thumbnail'ı tam 0.5×) çapa türetmeye gerek yoktur; "
+                     "--kalibre yerine bu kullanılır.")
 ap.add_argument("--tol", type=int, default=28)
 ap.add_argument("--kalibre-tol", dest="kalibre_tol", type=int, default=60,
                 help="Kalibrasyon ÇAPASI için renk eşiği (vars. 60). Ekranda çapaya yakın "
@@ -142,6 +146,14 @@ ap.add_argument("--olcekle", action="store_true",
                 help="Render'ı XD boyutuna ÖLÇEKLE. Varsayılan: ölçekleme yok, ikisi de ortak "
                      "en küçük boyuta kırpılır (sol-üst hizalı). Ölçeklemek birikimli kaymayı "
                      "gizler ama tüm metni bulanıklaştırır.")
+ap.add_argument("--json", dest="json_out", default=None,
+                help="Makine okunur çıktı dosyası. Hesaplama DEĞİŞMEZ; yalnız aynı "
+                     "sonuçlar JSON olarak da yazılır (ham/yapısal/bölgeler).")
+ap.add_argument("--kirpma-dizin", dest="kirpma_dizin", default=None,
+                help="En sapan bölgeler için hazır büyütülmüş kırpmalar bu dizine yazılır. "
+                     "Ajanın BAKACAĞI dosyalar; --kirpma-adet ile sınırlanır (vars. 4).")
+ap.add_argument("--kirpma-adet", dest="kirpma_adet", type=int, default=4,
+                help="Kaç bölge için kırpma üretilecek (vars. 4 — ajan bütçesi).")
 ap.add_argument("--yapisal", type=int, default=4,
                 help="Yapısal karşılaştırma için küçültme katsayısı (vars. 4). Metin kenar "
                      "yumuşatma gürültüsünü siler, yapısal farkı bırakır.")
@@ -182,6 +194,12 @@ if a.kalibre:
     A = A.crop((round(ox + tx * olcek_x), round(oy + ty * olcek_y),
                 round(ox + (tx + tw) * olcek_x), round(oy + (ty + th) * olcek_y)))
 
+if a.xd_kutu:
+    # Ölçek bilindiği için çapa türetilmiyor — kutu doğrudan uygulanır.
+    ax, ay, aw, ah = dort(a.xd_kutu)
+    A = A.crop((round(ax), round(ay), round(ax + aw), round(ay + ah)))
+    print(f"XD kırpması (bilinen ölçek): {ax},{ay},{aw},{ah}")
+
 if a.render_kutu:
     rx, ry, rw, rh = dort(a.render_kutu)
     B = B.crop((round(rx), round(ry), round(rx + rw), round(ry + rh)))
@@ -195,7 +213,7 @@ if a.anchor:
             print(f"HATA: çapa rengi {a.anchor} {name} görüntüsünde bulunamadı"); sys.exit(2)
         if name == "XD": A = A.crop(bb)
         else: B = B.crop(bb)
-elif not a.kalibre and not a.render_kutu:
+elif not a.kalibre and not a.render_kutu and not a.xd_kutu:
     A, B = trim_uniform(A), trim_uniform(B)
 
 print(f"XD     : {A.size[0]}×{A.size[1]}")
@@ -261,6 +279,52 @@ print(f"\nen çok sapan bölgeler ({a.grid}×{a.grid} ızgara, satır/sütun 0-t
 for pct, r, c in kotu[:6]:
     if pct < 0.5: break
     print(f"   satır {r} sütun {c}: %{pct:.1f}  (piksel kutusu x {c*gw}-{(c+1)*gw}, y {r*gh}-{(r+1)*gh})")
+
+# ── makine okunur cikti + hazir kirpmalar ───────────────────────────────────
+# NOT: Buradan asagisi yalnizca YAZAR. Yukaridaki hesaplama satirlarina
+# dokunulmadi; ham/yapisal/izgara ayni sayilari uretiyor.
+_bolgeler = []
+for pct, r, c in kotu:
+    if pct < 0.5:
+        break
+    _bolgeler.append({
+        "satir": r, "sutun": c, "yuzde": round(pct, 2),
+        "kutu": [c * gw, r * gh, min(gw, W - c * gw), min(gh, H - r * gh)],
+        "kirpma": None,
+    })
+
+if a.kirpma_dizin:
+    import os
+    os.makedirs(a.kirpma_dizin, exist_ok=True)
+    for i, b in enumerate(_bolgeler[: a.kirpma_adet]):
+        x, y, bw, bh = [int(v) for v in b["kutu"]]
+        pad = 6
+        x0, y0 = max(0, x - pad), max(0, y - pad)
+        x1, y1 = min(W, x + bw + pad), min(H, y + bh + pad)
+        ca, cb = A.crop((x0, y0, x1, y1)), B.crop((x0, y0, x1, y1))
+        cw, ch = ca.size
+        panel = Image.new("RGB", (cw * 2 + 8, ch), (255, 255, 255))
+        panel.paste(ca, (0, 0)); panel.paste(cb, (cw + 8, 0))
+        k = max(2, min(6, 240 // max(1, ch)))     # okunur boyuta buyut
+        panel = panel.resize((panel.size[0] * k, panel.size[1] * k), Image.NEAREST)
+        yol = os.path.join(a.kirpma_dizin, f"bolge-{i+1}-s{b['satir']}c{b['sutun']}.png")
+        panel.save(yol)
+        b["kirpma"] = yol
+    print(f"\nhazir kirpmalar: {a.kirpma_dizin}  (sol: XD · sag: render, {min(len(_bolgeler), a.kirpma_adet)} bolge)")
+
+if a.json_out:
+    import json as _json
+    _json.dump({
+        "ham": round(oran_farkli, 4),
+        "yapisal": round(oran_yapisal, 4),
+        "esik": a.tol,
+        "esikYapisal": a.esik_yapisal,
+        "boyut": [W, H],
+        "izgara": a.grid,
+        "bolgeler": _bolgeler,
+        "isiHaritasi": a.out,
+    }, open(a.json_out, "w"), ensure_ascii=False, indent=1)
+    print(f"json: {a.json_out}")
 
 # gorsel cikti: XD | render | isi haritasi
 heat = diff.convert("L").point(lambda v: 255 if v > a.tol else v * 2)

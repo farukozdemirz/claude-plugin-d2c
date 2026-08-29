@@ -2,9 +2,35 @@
 
 Buradaki her madde bu aracı geliştirirken **gerçekten yaşandı**. Tahmini senaryo yok.
 
+> **1.8.0 notu.** Normal akış artık chrome-devtools MCP kullanmıyor; ölçüm HTTP + AGC,
+> doğrulama kendi Playwright oturumu, görsel referans manifest thumbnail'ı ile yapılıyor.
+> Aşağıdaki maddelerin bir kısmı bu yüzden **yalnız `extractorStrategy: "legacy"`**
+> modunda çıkar. Hiçbiri silinmedi — legacy yol çalışır durumda ve her madde bir kez
+> gerçekten yaşandı. Nerede geçerli olduğu madde başlarında yazıyor.
+
+## 1.8.0'da eklenen dört madde
+
+**`render verify` "hiçbiri bulunamadı" diyor.** `olcum.json`'daki `testid`'ler
+render'daki `data-testid`'lerle eşleşmiyor. Kod fazı (`d2c-code` §3) eşlemeyi
+doldurmalı. Komut bilerek **ölçmüyor**: uydurma seçiciyle ölçmek sessizce yanlış
+sonuç üretir.
+
+**Görsel diff %30 fark veriyor, gözle aynı görünüyorlar.** Referans ile render farklı
+ölçekte. Thumbnail referansı 0,5×; render 1×. Kod bunu algılayıp render'ı küçültüyor,
+ama `--kalibre` yolunda ölçekleme uygulanmaz — o yolda referansı tam çözünürlükte
+yakalayın.
+
+**POC-4 tüm fontları "yüklü değil" gösteriyor.** `next/font/local` üretilen aile adını
+değiştiriyor (`Bw Modelica` → `bwModelica`). Kontrol **üretilen** adla yapılmalı;
+`font parity` bunu sayfadan punto+renk ile otomatik çözüyor. Çözemezse XD adını
+kullanır ve fark tabloda görünür.
+
+**`playwright-core bulunamadı`.** Opsiyonel bağımlılık: `npm i -D playwright-core`.
+Ölçüm (`xd extract` / `sections` / `spec`) bu paket olmadan da çalışır.
+
 ---
 
-## Agent kayda giriyor ama chrome-devtools araçları YOK (0 araç)
+## Agent kayda giriyor ama chrome-devtools araçları YOK (0 araç) *(yalnız legacy)*
 
 **Belirti:** `design-diff` / `visual-diff` çağrılıyor, cevap veriyor — ama
 `mcp__chrome-devtools__list_pages` çağrısı `No such tool available` diyor.
@@ -47,7 +73,7 @@ düzelttikten sonra Claude Code'u yeniden başlatın, yoksa eski kayıt sürer.
 
 ---
 
-## `The browser is already running for .../chrome-profile`
+## `The browser is already running for .../chrome-profile` *(yalnız legacy)*
 
 **Belirti:** Herhangi bir `mcp__chrome-devtools__*` çağrısı şu hatayı veriyor:
 
@@ -78,7 +104,7 @@ Başkasının oturumunu kapatmadan önce **sorun** — o oturum ölçüm yapıyo
 
 ---
 
-## `fullPage` ekran görüntüsü sayfayı yeniden diziyor
+## `fullPage` ekran görüntüsü sayfayı yeniden diziyor *(yalnız legacy — yeni yol `fullPage` kullanmıyor)*
 
 **Belirti:** `emulate({viewport:"1455x1000x1"})` yapıp `clientWidth === 1440`
 doğruladınız, ama `fullPage: true` ile alınan görüntüde ölçüler 1455 düzenine ait
@@ -93,7 +119,13 @@ görüntüdeki bilinen bir elemanın genişliğini doğrulayın.
 
 ---
 
-## Görsel diff kalibrasyonu yanlış elemana kilitleniyor
+## Görsel diff kalibrasyonu yanlış elemana kilitleniyor *(yalnız `--kalibre` yolunda)*
+
+> **1.11.0 notu:** Görsel karşılaştırma artık varsayılan olarak TypeScript motorunda
+> çalışıyor (PIL gerekmez). `--kalibre` verildiğinde motor **otomatik olarak Python'a
+> düşer**, çünkü aşağıdaki çapa mantığı bilerek taşınmadı. Yani bu bölüm hâlâ geçerli
+> ve `visual-diff.py` yerinde duruyor. TS motorundan şüphelenirsen
+> `visual diff --motor python` ile eski yolu zorlayabilirsin.
 
 **Belirti:** `--kalibre "#0C2380:64,701.16,1312,72"` verdiniz ama kırpma tamamen kaymış;
 ölçek 1.0 yerine tuhaf bir sayı çıkıyor.
@@ -171,7 +203,8 @@ alıyor. Ölçüler doğru göründüğü için gözden kaçıyor.
 
 **Çözüm:** `.d2c.json`'da `devPort` verin, ya da boş port seçin:
 ```bash
-PORT=$(python3 -c "import socket;s=socket.socket();s.bind(('',0));print(s.getsockname()[1]);s.close()")
+# Node ile — 1.11.0'dan sonra python3 artık bir önkoşul değil
+PORT=$(node -e "const s=require('net').createServer();s.listen(0,()=>{console.log(s.address().port);s.close()})")
 ```
 Açtıktan sonra **doğru uygulama olduğunu** `document.title` + beklenen seçiciyle teyit
 edin. Seçici yoksa **ölçmeyin**.
@@ -179,6 +212,15 @@ edin. Seçici yoksa **ölçmeyin**.
 ---
 
 ## 1440'ta ölçtüm ama değerler 1425 çıkıyor
+
+> **1.12.0 notu — bu her ortamda olmuyor.** Ölçüldü: *headless* Chrome **overlay**
+> kaydırma çubuğu kullanıyor; çubuk layout genişliğini yemiyor ve telafi hiç
+> tetiklenmiyor. Tuzak **klasik** çubuklu ortamlara özgü (headed Chrome, sistem
+> ayarına göre). `viewportAyarla` ikisini de doğru ele alıyor: telafiyi yalnız
+> gerektiğinde uyguluyor ve **sonucu doğruluyor** — tutmuyorsa ölçmüyor.
+> Telafi dalı artık sahte bir `Page` ile deterministik test ediliyor
+> (`cli/test/verify.test.mjs`), çünkü gerçek tarayıcıda dalın çalışıp çalışmadığı
+> koşan makinenin çubuk rejimine bağlı.
 
 **Sebep:** Sayfa dikeyde taşıyorsa Chrome'un klasik kaydırma çubuğu ~15px yer kaplar;
 1440'lık pencerede layout genişliği **1425** olur. 1312'lik bar 1297, 640'lık kart 632.5
@@ -201,7 +243,7 @@ sessizce daha geniş kalıyor — mobil ölçümü desktop ölçümüne çevirir
 
 ---
 
-## Panel radius vermiyor
+## Panel radius vermiyor *(yalnız legacy — AGC radius'u birebir veriyor)*
 
 **Belirti:** Kartın köşesi yuvarlak ama spec panelinde `radius` satırı yok.
 
@@ -233,7 +275,7 @@ kıs. Doğrulanmış: 16/27 gövde (yarıSatır 3.5) → `mt-[4.5px]` (XD 8) ve 
 
 ---
 
-## Eleman tıklayınca hep üst Group seçiliyor
+## Eleman tıklayınca hep üst Group seçiliyor *(yalnız legacy — AGC tüm ağacı veriyor)*
 
 **Sebep:** XD bazı metinleri grubun içinden seçtirmiyor; kaç kez tıklarsanız tıklayın
 panel `Group`'u veriyor.
@@ -245,7 +287,7 @@ gelmez** — ölçemediğinizi raporlayın.
 
 ---
 
-## Ölçüm yarıda kesildi / sayfa altımdan çekildi
+## Ölçüm yarıda kesildi / sayfa altımdan çekildi *(yalnız legacy — ağ yolunda paylaşımlı tarayıcı yok)*
 
 **Sebep:** chrome-devtools MCP tarayıcısı **paylaşımlı ve tek**. Arka planda çalışan
 bir doğrulama ajanı ana ölçümün sayfasını devraldı.
@@ -276,7 +318,7 @@ sunmuyor — `[text-overflow:clip]` **etkisiz**.
 
 ---
 
-## Zoom %25'in altına inmiyor
+## Zoom %25'in altına inmiyor *(yalnız legacy)*
 
 **Sebep:** XD viewer'ın zoom kutusu 25'te tabanlıyor (20/15/12 yazsanız da).
 

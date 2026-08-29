@@ -14,8 +14,9 @@ veya `hepsi`. Verilmezse bölüm haritasını gösterip sorar.
 
 ## İlk iş
 
-`references/segmentation.md`'yi oku. Ayrıştırma yöntemi iki ekranda doğrulanmış —
-alternatifini (probe ile başlık avlama) deneme, çalışmıyor.
+Ağ yolunda (varsayılan) ayrıştırmayı `d2c sections` yapıyor — §1-2'ye geç.
+`references/segmentation.md`'yi yalnız **legacy** yolda ya da bölüm haritası bir
+tasarımda anlamsız çıktığında oku.
 
 
 ## Script yolları
@@ -35,14 +36,15 @@ if [ -z "$D2C_ROOT" ]; then
            "$HOME"/.claude/plugins/*/d2c \
            "$HOME"/.claude/skills/d2c \
            ./.claude; do
-    [ -f "$c/skills/d2c-code/scripts/component-inventory.py" ] && D2C_ROOT="${c%/}" && break
+    [ -f "$c/cli/dist/d2c.mjs" ] && D2C_ROOT="${c%/}" && break
   done
 fi
 [ -z "$D2C_ROOT" ] && echo "HATA: plugin kökü bulunamadı" && exit 1
 echo "D2C_ROOT=$D2C_ROOT"
 ```
 
-Bundan sonra tüm script çağrıları `"$D2C_ROOT/skills/.../scripts/..."` biçiminde.
+Bundan sonra CLI `"$D2C_ROOT/cli/dist/d2c.mjs"`, Python scriptleri
+`"$D2C_ROOT/skills/.../scripts/..."` biçiminde çağrılır.
 **Repo-göreli yol yazma** — plugin başka bir projede çalışacak.
 
 ## 0. Önkoşul kontrolü — eksikse DUR
@@ -51,13 +53,13 @@ Sessiz başarısızlık en pahalı hata. Sırayla kontrol et, ilk eksikte dur ve
 
 | # | Kontrol | Nasıl | Eksikse |
 |---|---|---|---|
-| 1 | chrome-devtools MCP | `mcp__chrome-devtools__*` araçları var mı **ve gerçekten çağrılabiliyor mu** | `claude mcp add chrome-devtools -- npx -y chrome-devtools-mcp@latest --isolated` — **`--isolated` şart**, yoksa ikinci oturum profili açamaz (bkz. sorun-giderme) |
-| 2 | `design-diff` agent | Agent aracıyla **gerçekten çağır** ve `mcp__chrome-devtools__list_pages`'i **çağırt** | Cevap dönmesi kanıt değil — araç sayısı 0 olabilir. Plugin ajanında MCP erişimi `tools:` içindeki `mcp__chrome-devtools__*` deseniyle verilir; `mcpServers:` **plugin ajanlarında yok sayılır**. Proje kopyası varsa `d2c:` önekiyle çağır, yoksa yanlış kopyayı test edersin. Yeni kurulan plugin bir sonraki oturumda kayda girer. |
-| 3 | `visual-diff` agent | aynı | aynı |
-| 4 | Python + PIL | `python3 -c "import PIL"` | `visual-diff.py` ve `section-map.py` bunsuz çalışmaz |
+| 0 | Node + CLI | `node "$D2C_ROOT/cli/dist/d2c.mjs" doctor` | Node ≥18 gerekir. Ölçüm bu yolla yapılır; tarayıcı gerekmez. |
+| 1 | Chrome (doğrulama için) | `node "$D2C_ROOT/cli/dist/d2c.mjs" doctor` | `playwright-core` + sistem Chrome. Yoksa **ölçüm yine çalışır**, `render verify` / `visual diff` çalışmaz: `npm i -D playwright-core` |
+| 2 | Python + PIL | `python3 -c "import PIL"` | **Normal akışta GEREKMEZ** (1.11.0: görsel diff TS'e taşındı, PIL ile eşdeğerliği kanıtlı). Yalnız `extractorStrategy: "legacy"` ya da `visual diff --motor python` / `--kalibre` için |
+| 3 | chrome-devtools MCP | **yalnız `extractorStrategy: "legacy"` ise** | Normal akışta **GEREKMEZ**. Legacy'de: `claude mcp add chrome-devtools -- npx -y chrome-devtools-mcp@latest --isolated` (**`--isolated` şart**). Ajan kayıt tuzakları için bkz. `docs/troubleshooting.md` |
 | 5 | `.d2c.json` | Repo kökünde var mı | Yoksa **sor ve oluştur** (aşağıya bak) |
 | 6 | Fontlar | `.d2c.json`'daki her aile projede yüklü mü — canvas genişlik testi (`document.fonts.check` YALAN SÖYLER, bkz. `design-diff` §3) | **Dur ve söyle.** Doğrulanmış: 5 eleman sessizce Arial'a düştü, ölçüler doğru görünüp aile yanlış kaldı. |
-| 7 | Kilit | `<reportDir>/.d2c.lock` var mı | Varsa **dur** — bkz. §5 |
+| 7 | Kilit | **yalnız legacy modda** — `<reportDir>/.d2c.lock` | Ağ yolunda gerekmez (paylaşımlı tarayıcı yok). Legacy'de varsa **dur** — bkz. §5 |
 
 ## 0b. `.d2c.json`
 
@@ -71,9 +73,12 @@ Repo kökünde aranır. **Yoksa kullanıcıya sorup oluştur; okumadan kod üret
   "previewDir": "app",              // doğrulama sayfalarının yazılacağı yer
   "devCommand": "npm run dev",
   "devPort": 3005,                  // 3000 dolu olabilir
-  "fonts": ["Bw Modelica", "Tobias"],
+  "fonts": ["<tasarımın gövde fontu>", "<tasarımın başlık fontu>"],
+  // XD spec panelinin gösterdiği aile adları — projede YÜKLÜ olmalı,
+  // yoksa metin ölçüleri sessizce kayar (önkoşul #6 bunu yakalar).
   "reportDir": "docs/d2c",
-  "writeAllowlist": ["components/**", "app/**", "docs/d2c/**"]
+  "writeAllowlist": ["components/**", "app/**", "docs/d2c/**"],
+  "extractorStrategy": "auto"       // auto | network | legacy  (vars. auto)
 }
 ```
 
@@ -86,16 +91,39 @@ Repo kökünde aranır. **Yoksa kullanıcıya sorup oluştur; okumadan kod üret
 | `fonts` | Önkoşul kontrolü #6 |
 | `reportDir` | Tüm rapor çıktısı. Repo kökünü kirletme. |
 | `writeAllowlist` | **Bu kalıpların dışına YAZMA.** Kalıp dışı bir dosya değiştirmen gerekiyorsa dur ve sor. |
+| `extractorStrategy` | **`auto`** (vars.): ağ yolu; sözleşme bozuksa teşhisle durur. **`network`**: yalnız ağ. **`legacy`**: 1.4.0 davranışı (chrome-devtools MCP + playbook). Legacy yol M3'e kadar **korunuyor**. |
 
-## 1. Ekranı seç
+## 1-2. Ekran seçimi + bölüm haritası — **tek komut**
 
-Linki aç (playbook §2-4). `/screen/<id>` varsa o ekran; yoksa ekran listesini çıkar
-(playbook §12) ve kullanıcıya sor.
+`extractorStrategy` `auto` veya `network` ise (varsayılan) bu iki adım tarayıcı
+olmadan, tek CLI çağrısıyla biter:
 
-Aynı sayfanın **mobil karşılığını** da bul — ekran adları eşleşir
-("Desktop - Ekran A" ↔ "Mobil - Ekran A"). İkisi de ölçülecek.
+```bash
+D2C="$D2C_ROOT/cli/dist/d2c.mjs"
+node "$D2C" xd inspect "<link>"                              # ekran listesi (~0,5 sn)
+node "$D2C" xd extract "<link>" --screen "<ad>" -o "$R/design.json"   # desktop+mobil
+node "$D2C" sections --design "$R/design.json" --json -o "$R/bolum-haritasi-<ekran>.json"
+```
 
-## 2. Bölüm haritası
+`xd inspect` her ekranın **mobil eşini** de gösterir (`↔ eşi var`); `xd extract`
+ikisini birlikte çıkarır. Eşi bulunamayan ekranda `—` görürsün — o zaman mobil ekranı
+kullanıcıya sor, **varsayma**.
+
+> **`design.json`'ı AÇMA.** Tam scenegraph, yüzlerce KB. Kod üretimi için gereken her
+> şey `olcum.json`'da (§3). Bu sınır bilerek konuldu.
+
+**Kalibrasyon yok, probe yok, screenshot yok** — bu üç iş ana döngünün en pahalı
+parçasıydı.
+
+### Legacy yol  *(korunuyor)*
+
+`extractorStrategy: "legacy"` ise veya ağ yolu sözleşme hatası verdiyse aşağıdaki
+klasik akış geçerlidir:
+
+**1. Ekranı seç.** Linki aç (`xd-viewer-notlari.md` §2-4). `/screen/<id>` varsa o ekran; yoksa ekran
+listesini çıkar (`xd-viewer-notlari.md` §12) ve kullanıcıya sor. Mobil karşılığını da bul.
+
+**2. Bölüm haritası (legacy)**
 
 `references/segmentation.md`'deki dört adımı uygula: kalibrasyon → bant taraması →
 boş satır analizi → isimlendirme. Çıktıyı tabloya dök:
@@ -116,8 +144,14 @@ Argümanda bölüm belirtilmediyse haritayı göster ve **hangi bölüm(ler)** d
 
 ## 3. Her bölüm için: `/d2c-code`
 
-Seçilen her bölüm için `d2c-code` skill'ini çağır (Skill aracı). Bölüm
-tarifini haritadan üret: bölüm adı + tasarım kutusu (`Y..H`, tam genişlik).
+Önce bölümün ölçümünü üret (ağ yolunda tek komut):
+
+```bash
+node "$D2C" spec --design "$R/design.json" --section <no|slug> --out-dir "$R/<bolum-slug>"
+```
+
+Sonra `d2c-code` skill'ini çağır (Skill aracı) ve ona **`olcum.json` yolunu** ver.
+Bölüm tarifini haritadan üret: bölüm adı + tasarım kutusu (`Y..H`, tam genişlik).
 
 `/d2c-code` kendi içinde şunları yapıyor, tekrar etme:
 3a envanter → 3 kod → 4 `design-diff` → 4b `visual-diff` → 4c `/code-review` + regresyon.
@@ -128,17 +162,29 @@ topluca raporla.
 ## 3b. Hız bütçesi — araç çağrısı say
 
 Bu boru hattında **süre ≈ araç çağrısı sayısı × ~15 sn**. Darboğaz tarayıcı değil,
-çağrı başına model gecikmesi. Ölçüldü: `design-diff` 124 sn / 7 çağrı, `visual-diff`
-612 sn / 53 çağrı. Bekleme sürelerini kısaltmak toplamda 1 dakika bile kazandırmaz;
-**tek kaldıraç çağrı sayısıdır.**
+çağrı başına model gecikmesi; **tek kaldıraç çağrı sayısıdır.**
+
+Ölçülen (1.4.0 → 1.8.0):
+
+| Adım | Eski (ortanca) | Şimdi |
+|---|---|---|
+| Çıkarma + bölüm haritası + `olcum.json` | ~229 çağrı | **1** |
+| Render doğrulama | 11 çağrı / 184 sn | **1** / 1,3 sn |
+| Görsel karşılaştırma | 56 çağrı / 960 sn | **1** / 2,7 sn (+ ≤4 `Read`) |
+
+Ayrıntı: `docs/benchmark.md`.
+
+**Ağ yolunda ölçüm fazı tek çağrıya indi** (1.6.0). Ölçülen taban için
+`docs/benchmark.md`'ye bak: bölüm başına ortanca **139 çağrı / 57,7 dk** (1.4.0).
 
 Tek bölüm için hedef bütçe:
 
-| Faz | Çağrı |
-|---|---|
-| Kurulum + kilit + envanter | 3 |
-| Kalibrasyon (playbook §24, **tek çağrı**) | 1-2 |
-| Ölçüm probe'ları (**toplu** — §10) | 4-6 |
+| Faz | Çağrı (ağ yolu) | Çağrı (legacy) |
+|---|---|---|
+| Çıkarma + bölüm haritası + `olcum.json` | **1-3** | 25-40 |
+| Kurulum + kilit + envanter | 3 | 3 |
+| Kalibrasyon (`xd-viewer-notlari.md` §24) | **0** | 1-2 |
+| Ölçüm probe'ları (§10) | **0** | 4-6 |
 | Referans yakalama (ölçüm fazında) | 2-3 |
 | Kod + önizleme sayfası | 3-4 |
 | Düzeltme + ön kontrol (her tur **tek** çağrı) | 2-4 |
@@ -194,29 +240,18 @@ docs/d2c/
 tutulur; yoksa kod fazı XD'ye geri döner ve `visual-diff` çapayı yeniden türetir —
 bölüm başına **~15 araç çağrısı ≈ 4 dakika** kayıp. Şeması `d2c-spec` SKILL.md'de.
 
-## 5. Eşzamanlılık — kilit
+## 5. Eşzamanlılık
 
-chrome-devtools MCP tarayıcısı **paylaşımlı ve tek**. Aynı anda ikinci bir `/d2c`
-çalıştırılamaz; ikisi birbirinin sayfasını devralır. Bu gerçekten yaşandı: arka planda
-çalışan bir doğrulama ajanı ana ölçümün sayfasını devraldı ve ölçüm yarıda kesildi.
+Ağ yolunda **kilit gerekmiyor.** Çıkarma HTTP ile yapılıyor; doğrulama ve görsel
+karşılaştırma kendi Playwright oturumunu açıp **her koşuda kapatıyor**. Paylaşımlı tek
+tarayıcı sorunu (ve onun yaması olan `.d2c.lock`) ortadan kalktı.
 
-Başlarken:
+> **Legacy modda kilit hâlâ gerekli.** `extractorStrategy: "legacy"` chrome-devtools
+> MCP'nin **paylaşımlı ve tek** tarayıcısını kullanıyor; aynı anda ikinci bir `/d2c`
+> birbirinin sayfasını devralır (gerçekten yaşandı). O modda `<reportDir>/.d2c.lock`
+> kontrolü ve `run_in_background: false` kuralı geçerliliğini koruyor —
+> `docs/troubleshooting.md`'ye bakın.
 
-```bash
-LOCK="$REPORT_DIR/.d2c.lock"
-if [ -f "$LOCK" ]; then
-  echo "KİLİT VAR — başka bir /d2c çalışıyor olabilir:"; cat "$LOCK"
-  echo "Süreç ölmüşse kilidi elle sil: rm $LOCK"
-  exit 1
-fi
-mkdir -p "$REPORT_DIR"
-printf '{"pid":%d,"baslangic":"%s","ekran":"%s"}\n' "$$" "$(date -Iseconds)" "$EKRAN" > "$LOCK"
-```
-
-Bitince (**hata durumunda da**) sil: `rm -f "$LOCK"`.
-
-Doğrulama ajanlarını **`run_in_background: false`** ile çağır — arka planda çalıştırmak
-tarayıcıyı senin altından çeker.
 
 ## 6. Telemetri
 
@@ -238,10 +273,51 @@ import json;print(json.load(open('$D2C_ROOT/.claude-plugin/plugin.json'))['versi
 Tam şema:
 
 ```json
-{"tarih":"2026-08-26T14:02:11+03:00","surum":"1.3.0","ekran":"Desktop - Ekran A","bolum":10,"bolum_ad":"Bölüm Başlığı","artboardlar":["1440x3778","375x4164"],"olcum_turu":2,"sapma":0,"gorsel_diff":{"ham":7.81,"yapisal":10.03,"aksiyon":0},"review_bulgu":10,"review_uygulanan":6,"cozulemedi":1,"sonuc":"tamam","sure_sn":842}
+{"tarih":"2026-08-26T14:02:11+03:00","surum":"1.3.0","ekran":"Desktop - Ekran A","bolum":10,"bolum_ad":"Bölüm Başlığı","artboardlar":["1440x3778","375x4164"],"olcum_turu":2,"sapma":0,"gorsel_diff":{"ham":7.81,"yapisal":10.03,"aksiyon":0},"review_bulgu":10,"review_uygulanan":6,"cozulemedi":1,"sonuc":"tamam","sure_sn":842,"arac_cagrisi":{"ana_dongu":69,"ajan":70,"toplam":139},"faz_sn":{"ana_dongu":2240,"design_diff":308,"visual_diff":612},"tur":{"design_diff":2,"visual_diff":1}}
 ```
 
 `sonuc`: `tamam` · `sapmayla-bitti` · `basarisiz` · `atlandi-zaten-var`
+
+### `arac_cagrisi` — asıl metrik
+
+**Süre gürültülüdür; araç çağrısı sayısı değildir.** Model gecikmesi ve makine yükü
+süreyi oynatır, ama çağrı sayısı deterministik adımların sayımıdır. Bir iyileştirmenin
+işe yarayıp yaramadığı **buradan** anlaşılır.
+
+Bu alanı **kendini sayarak doldurma** — kırılgan ve doğrulanamaz. Bölüm bitince
+transcript'ten ölç:
+
+```bash
+node "$D2C_ROOT/cli/test/bench/count-tool-calls.mjs" \
+  --project "$(pwd)" --since "$BASLANGIC_ISO" --json
+```
+
+`ana_dongu` = skill'in kendi çağrıları · `ajan` = `design-diff` + `visual-diff`
+turlarının içindeki çağrılar · `toplam` = ikisinin toplamı.
+
+`faz_sn` süreyi fazlara böler; `tur` her doğrulama ajanının kaç tur çalıştığını tutar.
+
+> **1.12.0: süreler artık tahmin değil, ölçüm.** Her komut `--trace <dosya>` ile
+> faz sürelerini JSON yazar; `--verbose` aynı özeti stderr'e insan okunur basar
+> (stdout makine okunur kalsın diye). Örnek:
+>
+> ```bash
+> node "$D2C" render verify … --trace "$REPORT_DIR/izleme.json"
+> # izleme.json → {"toplamMs":1256,"fazlar":[…],"fazSn":{"sayfa-yukleme":0.51,…}}
+> ```
+>
+> `fazSn` doğrudan `runs.jsonl`'daki `faz_sn` alanına konabilir. Ölçülen fazlar:
+> `xd-shell` · `cdn-indirme` · `cikarma` · `bolumleme` · `playwright-yukleme` ·
+> `sayfa-yukleme` · `olcum` · `referans-indirme` · `render-yakalama` ·
+> `piksel-karsilastirma` · `envanter-tarama` · `smoke`.
+>
+> İzleme yalnız SÜRE taşır; URL ya da token girmez (Kural 2).
+**Maliyeti tur sayısı belirliyor**, tur başına maliyet değil (bkz. §3c) — bu yüzden
+tur sayısı ayrıca kaydedilir.
+
+Temel değerler ve karşılaştırma yöntemi: [`docs/benchmark.md`](../../docs/benchmark.md).
+Ölçülen taban (1.4.0 öncesi, üç kabul ekranı): bölüm başına ortanca **139 çağrı**,
+**57,7 dk**; `design-diff` tur başına ortanca 11 çağrı, `visual-diff` 56.
 
 **`sure_sn` ve `surum` boş geçilemez.** Aracın isabet oranı *ve hızı* bu dosyadan çıkar;
 `surum` olmadan bir iyileştirmenin işe yarayıp yaramadığı karşılaştırılamaz. Bu alanlar

@@ -3,6 +3,34 @@
 Artboard'ı bölümlere ayırmanın doğrulanmış yöntemi. İki ekranda test edildi:
 "Desktop - Ekran A" (5/24) ve "Desktop - Ekran B" (6/24).
 
+## Hızlı yol — `d2c sections` (1.5.0+)
+
+`design.json` hazırsa bölüm haritası **tek komutla, tarayıcı olmadan** çıkar:
+
+```bash
+node "$D2C_ROOT/cli/dist/d2c.mjs" xd extract "<xd-link>" --screen "<ekran>" -o design.json
+node "$D2C_ROOT/cli/dist/d2c.mjs" sections --design design.json --json -o bolum-haritasi.json
+```
+
+Aşağıdaki yöntemin **aynısını** uygular; farkı, iki sinyalin de scenegraph'tan gelmesi:
+tam genişlik bantları probe yerine geometriden, boş satır analizi ekran görüntüsü yerine
+eleman kutularından. Kalibrasyon gerekmez.
+
+Doğrulama (ekran 5/24, gerçek koşunun bölüm haritasına karşı): **4 bandın 4'ü birebir**
+(y, h, ad, renk), bölüm sayısı aynı (11), bant bölümlerinin sınırları birebir, boşluk
+türevli sınırlar **≤ 5 px** sapıyor. Sapmanın sebebi: eski yöntem ekran görüntüsündeki
+*mürekkebi*, yeni yöntem eleman *kutularını* kullanıyor; metin çerçevesi mürekkepten
+biraz taşar.
+
+Ekran 6/24'ün üç bandı da (@Y0 h69 · @Y69 h504 · @Y573 h2452.89 `#F9FAFB`) birebir çıkıyor.
+
+> **Aşağıdaki probe yöntemi kaldırılmadı.** `extractorStrategy: "legacy"` ile hâlâ
+> geçerlidir ve `d2c sections` bir tasarımda anlamlı sonuç vermezse başvurulacak yoldur.
+
+---
+
+## Legacy yol — XD probe + ekran görüntüsü
+
 ## Neden probe ile başlık avlanmıyor
 
 İlk denenen yöntem, içerik sütununda aşağı doğru tıklayıp büyük puntolu `Text`

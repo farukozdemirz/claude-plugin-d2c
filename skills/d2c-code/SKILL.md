@@ -32,7 +32,7 @@ if [ -z "$D2C_ROOT" ]; then
            "$HOME"/.claude/plugins/*/d2c \
            "$HOME"/.claude/skills/d2c \
            ./.claude; do
-    [ -f "$c/skills/d2c-code/scripts/component-inventory.py" ] && D2C_ROOT="${c%/}" && break
+    [ -f "$c/cli/dist/d2c.mjs" ] && D2C_ROOT="${c%/}" && break
   done
 fi
 [ -z "$D2C_ROOT" ] && echo "HATA: plugin kökü bulunamadı" && exit 1
@@ -46,17 +46,25 @@ Bundan sonra tüm script çağrıları `"$D2C_ROOT/skills/.../scripts/..."` biç
 
 ### 1. Girdi
 
-- Argüman **XD linkiyse**: `d2c-spec` skill'ini çağır (Skill aracı) ve akışını uygula;
-  playbook `$D2C_ROOT/skills/d2c-spec/references/playbook.md`. `<reportDir>/<bolum-slug>/spec.md`
-  üret. Sonra 2. adıma geç.
-- Argüman **rapor dosyası yoluysa**: dosyayı oku. Yanında `olcum.json` varsa
-  **onu da oku** — kalibrasyon, referans PNG ve kırpma kutusu oradadır.
-- Rapor hedef bölümü içermiyorsa ölçümü tamamla (playbook §6-11), rapora ekle.
+**Tek girdin `olcum.json`.** Bölüm kapsamlı ve kendi içinde yeterli: kutu · spacing ·
+radius · renk · kontur · tipografi · metin · eleman ilişkileri (`ebeveyn`/`sira`) ·
+`tekrar` (sıkıştırılmış diziler) · `hesaplanan` boşluklar.
+
+> **`design.json`'ı AÇMA.** Tam scenegraph, yüzlerce KB; bağlama sokmak ölçüm
+> maliyetini token'a taşır. İhtiyacın olan her değer `olcum.json`'da.
+
+- Argüman **XD linkiyse**: `d2c-spec` skill'ini çağır; o `olcum.json` + `spec.md` üretir.
+- Argüman **`olcum.json` / rapor yoluysa**: doğrudan oku.
+- `olcum.json` yoksa (eski rapor): `d2c-spec` legacy yolunu uygula.
+
+`tekrar` alanını doğru oku: `adet: 8, eksen: "x", adim: 332` demek **8 özdeş eleman,
+332 px arayla** demek — `hesaplanan`'daki gap (332 − 316 = 16) aradaki boşluktur.
+`duzenli: false` ise `konumlar` listesindeki her konum gerçektir.
 
 ### 2. Mobil + desktop
 
 Aynı sayfanın iki artboard'ı olabilir (ör. "Desktop - Ekran A" ve "Mobil - Ekran A").
-Ekran listesini gez (playbook §12) ve **ikisini de ölç**:
+Ekran listesini gez (`xd-viewer-notlari.md` §12) ve **ikisini de ölç**:
 
 - **Mobil değerler base**, **desktop `lg:` prefix'i**.
 - Tek artboard varsa bunu raporda ve kodda açıkça belirt — responsive davranış
@@ -68,11 +76,23 @@ Ekran listesini gez (playbook §12) ve **ikisini de ölç**:
 **Kod üretmeden önce** mevcut envanteri çıkar:
 
 ```bash
-python3 "$D2C_ROOT/skills/d2c-code/scripts/component-inventory.py"
+node "$D2C_ROOT/cli/dist/d2c.mjs" inventory components
 ```
 
 Çıktı her bileşenin XD kaynağını, ölçülerini, `data-testid`'lerini ve 3+ bileşende
-tekrar eden gömülü hex'leri (token adayları) verir. Ölçtüğün spec ile karşılaştır:
+tekrar eden gömülü hex'leri (token adayları) verir.
+
+> **1.12.0: envanter AST tabanlı.** Eski regex script yalnız `export function` ve
+> `export const` görüyordu; sentetik bir dosyada **5 export biçiminden 1'ini**
+> buluyordu. `export default function Kart`, `export { Kart as UrunKart }`,
+> `export * from` ve sınıf bileşenleri **görünmüyordu** — yani "bu bileşen yok"
+> deyip var olanı yeniden yazma riski vardı.
+>
+> Parse edilemeyen dosya **sessizce atlanmaz**, `⚠ PARSE EDİLEMEDİ` olarak
+> raporlanır ve çıkış kodu 1 olur; envanterin eksik olduğunu bilerek karar ver.
+>
+> Regex script `skills/d2c-code/scripts/component-inventory.py`'de **duruyor**
+> (geri dönüş). Ölçtüğün spec ile karşılaştır:
 
 - **Aynı XD elemanı** (aynı ekran + aynı `Rectangle`/`Path` adı) → yeni yazma, mevcut
   bileşeni kullan.
@@ -82,6 +102,19 @@ tekrar eden gömülü hex'leri (token adayları) verir. Ölçtüğün spec ile k
 - **Yeni** → devam et.
 
 Token adayı çıktıysa raporun "önerilen token" bölümünde öne çıkar.
+
+### 3a2. Varlıkları çıkar (ikon + görsel)
+
+Bölümde vektör ikon veya görsel varsa (`olcum.json`'da `tip: "gorsel"` ya da
+`gorselUid` dolu elemanlar), kod yazmadan önce tek komutla çıkar:
+
+```bash
+node "$D2C_ROOT/cli/dist/d2c.mjs" xd assets "<xd link>" --screen "<ekran>" \
+  --out-dir public/d2c
+```
+
+Gerçek SVG ve gerçek görsel dosyası gelir — placeholder ve yaklaşık ikon çizme
+gereği kalkar. `atlananlar` listesindeki her kalem için `{/* TODO */}` bırak.
 
 ### 3. Kod üret
 
@@ -104,6 +137,28 @@ dizisindeki ilgili kayda `"testid"` alanını ekle. `design-diff` hedef tablosun
 dosyadan okuyacak — eşleme olmazsa okuyamaz (§4).
 
 ### 4. Doğrula
+
+**Önce ölçümü kendin çalıştır — tek komut:**
+
+```bash
+node "$D2C_ROOT/cli/dist/d2c.mjs" render verify \
+  --olcum "<reportDir>/<bolum-slug>/olcum.json" --url "<render url>" \
+  --json -o "<reportDir>/<bolum-slug>/verification.json"
+```
+
+Viewport + scrollbar telafisi, doğru-uygulama teyidi, font kontrolü, rect +
+computedStyle, tolerans — hepsi içinde. **~1,3 sn.** Çıktı makine okunur.
+
+`sapan` yoksa ajanı hiç çağırma. Sapan varsa `design-diff` ajanına
+`verification.json` yolunu ver — o **sebebi** yorumlar.
+
+> `testid`'ler `olcum.json`'da `null` ise komut **ölçmez** ve söyler. §3'te
+> doldurulmuş olmalı.
+
+`playwright-core` yoksa (`d2c doctor` söyler) legacy yola düş: `design-diff` ajanını
+MCP'li haliyle çağır — o yol **korunuyor**.
+
+#### Legacy: ajanla elle ölçüm
 
 `design-diff` subagent'ını çağır. **Hedef tablosunu prompt'a ELLE YAZMA** —
 `olcum.json`'un yolunu ver, ajan `Read` ile kendisi okusun. Elle transkripsiyon hem
@@ -165,9 +220,24 @@ Sayısal tablo kutuları doğrular, **içlerini doğrulamaz.** Doğrulanmış: �
 olarak temiz çıktı; ilk görsel karşılaştırma `line-clamp-3`'ün eklediği `…` karakterini
 hemen yakaladı.
 
-1. **`<reportDir>/<bolum-slug>/olcum.json`'u oku — XD'ye GERİ DÖNME.** Referans PNG,
-   kalibrasyon ve kırpma kutusu ölçüm fazında zaten hazırlandı. Dosya yoksa (eski bir
-   rapor ya da elle verilmiş spec) playbook §23 ile yakala; **varsa yakalama.**
+1. **Karşılaştırmayı kendin çalıştır — tek komut:**
+
+```bash
+node "$D2C_ROOT/cli/dist/d2c.mjs" visual diff \
+  --olcum "<reportDir>/<bolum-slug>/olcum.json" \
+  --xd-url "<xd link>" --screen "<ekran adı>" \
+  --url "<render url>" --testid "<bölüm testid>" \
+  --out-dir "<reportDir>/<bolum-slug>/gorsel"
+```
+
+Referans indirme (HTTP, XD viewer açılmaz), render yakalama, piksel karşılaştırma ve
+**hazır kırpmalar** — hepsi içinde, **~2,7 sn**. Çıktı `visual.json`.
+
+Sapan bölge yoksa ajanı **hiç çağırma**. Varsa `visual-diff` ajanına `visual.json`
+yolunu ver — o kırpmalara **bakıp** ne gördüğünü söyler.
+
+#### Legacy: ajanla elle yakalama
+
 2. `visual-diff` subagent'ını çağır ve **hazır kırpma kutusunu ver**, çapayı
    türettirme. Prompt'a: `olcum.json`'daki `referans.png` yolu + `referans.kirpma` +
    `referans.esleme`, render URL'i + seçici + viewport, ve **bilinen/kabul edilen

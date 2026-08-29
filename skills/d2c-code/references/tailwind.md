@@ -100,10 +100,22 @@ document.fonts.check('16px "Bw Modelica"')
   yoktur — bu geçerli bir sonuçtur, gizlenecek bir hata değil.
 - Fallback seçerken metriği yakın bir aile kullan ve `font-family` zincirini raporda yaz.
 
-## Görseller
+## Görseller ve ikonlar — artık export ediliyor
 
-XD viewer'dan asset **indirilemez**. Placeholder (boyutu doğru bir `div` veya
-`next/image` + geçici kaynak) + `{/* TODO: görsel XD'den export edilmeli */}` bırak.
+```bash
+node "$D2C_ROOT/cli/dist/d2c.mjs" xd assets "<xd link>" --screen "<ekran>" \
+  --out-dir public/d2c
+```
+
+- **İkonlar** gerçek SVG olarak çıkar (`public/d2c/ikon/`). Yol verisi kaynaktan
+  birebir; **yaklaşık çizme yok**. Özdeş ikonlar tek dosyaya iner.
+- **Görseller** `public/d2c/gorsel/` altına iner (genelde WebP).
+  `olcekDavranisi: "fill"` → `object-fit: cover`.
+- **Atlananlar raporlanır**: gradient dolgu ve clipPath maskesi hâlâ çevrilemiyor.
+  Rapordaki her kalem için `{/* TODO */}` bırak — sessizce geçme.
+
+Export çalıştırılmadıysa eski davranış geçerli: doğru boyutta placeholder +
+`{/* TODO: görsel XD'den export edilmeli */}`.
 
 ## Birikimli sapma
 
@@ -209,3 +221,51 @@ Yatay kaydırmalı şeritte (carousel) klasik kaydırma çubuğu **15px** yer ka
 "overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
 ```
 
+
+---
+
+# XD ölçüsünü CSS'e çevirirken — yargı kuralları
+
+Bunlar eski `playbook.md`'den **terfi etti** (§14, §18, §19, §21). Ölçüm artık
+otomatik; ama bu dört nokta hâlâ **senin kararın** ve hâlâ hata kaynağı.
+
+## Boşluk, kutulardan türetilir  *(§14)*
+
+`padding` ve `gap` tasarım verisinde ayrı bir alan olarak **yoktur**; komşu kutuların
+farkından çıkar:
+
+```
+sol padding = içerik.x − kutu.x
+gap         = kutu2.x − (kutu1.x + kutu1.w)
+```
+
+`olcum.json`'daki `hesaplanan` bunu senin için yapıyor ve her kaydın `nasil` alanı
+hangi iki kutudan türediğini söylüyor. **Kendin yeniden hesaplama**; ama `nasil`'ı
+oku — bölümün yapısına göre doğru yorum değişir.
+
+## Metin kutusu ≠ mürekkep kutusu  *(§18)*
+
+İkon/glif elemanlarının kutusu yan boşlukları (side bearing) içerir; görünen mürekkep
+~1px dar olur. Konum karşılaştırırken ikisini karıştırma.
+
+Pratik sonucu `olcum.json`'da görünür: bir bölümün "en soldaki içeriği" bir glif ise
+padding olduğundan küçük çıkar. `hesaplanan`'daki `nasil` alanı hangi elemandan
+geldiğini ve en sık hizalanmayı birlikte verir — **kararı sen verirsin**.
+
+## Bir artboard'ın değerini diğerine TAŞIMA  *(§19)*
+
+Aynı işi gören, aynı adı taşıyan iki eleman iki artboard'da farklı olabilir.
+Doğrulanmış: özet barı desktop'ta radius **12**, mobilde **8**; üstelik desktop'taki
+bir `Path`, mobildeki bir `Rectangle`.
+
+`olcum.json` bu yüzden `desktop` ve `mobil` ölçülerini **ayrı** taşıyor ve hiçbiri
+diğerinden türetilmiyor. "Mobilde 8'di, desktop da 8'dir" çıkarımı yanlış kod üretir.
+
+## Stroke: geometri kenarı ≠ görsel kenar  *(§21)*
+
+*Center Stroke*'ta geometri kenarı ile görsel kenar yarım stroke kayar: 2px stroke'lu
+iki 48×48 butonda geometriden **17**, görsel dıştan **15** çıkar.
+
+`olcum.json` `kontur.hiza` alanını veriyor (`inside` / `outside` / `center`).
+CSS `border` kutunun **içine** çizdiği için koddaki `gap` geometri değerine değil
+görsel değere yakın durur. Hangisini kullandığını **raporda yaz**.

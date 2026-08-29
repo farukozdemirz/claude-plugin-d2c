@@ -24,11 +24,31 @@ refactor'ın hizayı bozup bozmadığını görmek için.
 1. **`.d2c.json`'ı oku.** Yoksa dur — `/d2c` çalıştırılıp oluşturulmalı.
 2. **Hedef değerleri bul.** `<reportDir>/<slug>/spec.md` yoksa ve XD linki de
    verilmediyse **dur**: neye karşı doğrulayacağını bilmiyorsun.
-3. **`design-diff`** subagent'ını çağır (`run_in_background: false`).
-   Prompt'a **her elemanın beklenen font ailesini ayrı ayrı** yaz — "bu tasarımın fontu X"
-   gibi genel bir cümle agent'a yanlış hedef uydurtuyor.
-4. **`visual-diff`** subagent'ını çağır. XD referans görüntüsü `<reportDir>/<slug>/`
-   altında yoksa `d2c-spec` playbook §23 ile yeniden yakala.
+3. **Ölç — iki komut, ajan gerekmez:**
+
+```bash
+D2C="$D2C_ROOT/cli/dist/d2c.mjs"
+node "$D2C" render verify --olcum "<reportDir>/<slug>/olcum.json" --url "<rota>" \
+  --json -o "<reportDir>/<slug>/verification.json"
+node "$D2C" visual diff --olcum "<reportDir>/<slug>/olcum.json" \
+  --xd-url "<xd link>" --screen "<ekran>" --url "<rota>" --testid "<bölüm testid>" \
+  --out-dir "<reportDir>/<slug>/gorsel"
+```
+
+İkisi toplam **~4 sn**. `verification.json`'da `sapan`, `visual.json`'da sapan bölge
+yoksa doğrulama temizdir — ajan çağırma.
+
+> **Motor (1.11.0).** Görsel karşılaştırma artık TypeScript'te; **Python + PIL
+> gerekmiyor**. Sonuçtan şüphelenirsen `--motor python` eski script'i çalıştırır
+> (eşdeğerliği testle sabit). `--kalibre` verirsen motor zaten otomatik Python olur;
+> hangisinin çalıştığı `visual.json` → `motor` alanında yazar.
+
+4. **Sapan varsa yorumlat.** `design-diff` ajanına `verification.json`,
+   `visual-diff` ajanına `visual.json` yolunu ver. Ajanlar ölçmez; **sebebi**
+   söyler ve hazır kırpmalara bakar.
+
+   *Legacy:* `playwright-core` yoksa ajanları MCP'li halleriyle çağır —
+   o yol korunuyor.
 5. **Raporla** — `<reportDir>/<slug>/verify-<tarih>.md`. Kodu **değiştirme**;
    sapma varsa listele ve `/d2c-code` ile düzeltilmesini öner.
 6. `<reportDir>/runs.jsonl`'a satır ekle (`"sonuc":"dogrulama"`).
