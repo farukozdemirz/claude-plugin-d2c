@@ -7717,8 +7717,9 @@ function parsePrototypeData(html) {
 }
 function normalizeShareUrl(url) {
   const u = url.trim().replace(/\s+$/, "");
-  if (/\/specs\/?$/.test(u)) return u.endsWith("/") ? u : u + "/";
-  return u.replace(/\/$/, "") + "/specs/";
+  const m = /^(https?:\/\/[^/]+)\/view\/([^/?#]+)/i.exec(u);
+  if (m) return `${m[1]}/view/${m[2]}/specs/`;
+  return u.endsWith("/") ? u : u + "/";
 }
 async function fetchShare(url, timeoutMs = 6e4) {
   const target = normalizeShareUrl(url);
@@ -7733,7 +7734,12 @@ async function fetchShare(url, timeoutMs = 6e4) {
     clearTimeout(timer);
   }
   if (!res.ok) {
-    throw redactedError(`XD linki ${res.status} d\xF6nd\xFC \u2014 link ge\xE7ersiz veya yay\u0131ndan kald\u0131r\u0131lm\u0131\u015F.`);
+    const degistirildi = target !== url.trim();
+    throw redactedError(
+      `XD linki ${res.status} d\xF6nd\xFC \u2014 link ge\xE7ersiz veya yay\u0131ndan kald\u0131r\u0131lm\u0131\u015F.` + (degistirildi ? `
+  Denenen adres: ${target}
+  Verilen adres : ${url.trim()}` : "")
+    );
   }
   const ct = res.headers.get("content-type") ?? "";
   if (!ct.includes("text/html")) {

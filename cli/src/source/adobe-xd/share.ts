@@ -121,11 +121,24 @@ export function parsePrototypeData(html: string): PrototypeData {
   return d;
 }
 
-/** specs URL'ini normalize eder — spec paneli için sonu `/specs/` olmalı. */
+/**
+ * Paylaşım URL'ini normalize eder.
+ *
+ * XD'nin birden çok link biçimi var ve hepsine körlemesine `/specs/` eklemek
+ * YANLIŞ. Ölçüldü: `https://xd.adobe.com/spec/<id>/grid/` canlı ve 200 dönüyor,
+ * ama sonuna `/specs/` eklenince 404 oluyor — araç da "link geçersiz veya
+ * yayından kaldırılmış" diyip KULLANICIYI suçluyordu. Hata linkte değil,
+ * bizim ürettiğimiz adresteydi.
+ *
+ * Kural: yalnız `/view/<id>...` biçimi `/view/<id>/specs/`'e indirgenir
+ * (derin prototip linkleri — `/view/<id>/screen/<sid>/` — dahil).
+ * Diğer biçimler OLDUĞU GİBİ denenir.
+ */
 export function normalizeShareUrl(url: string): string {
   const u = url.trim().replace(/\s+$/, '');
-  if (/\/specs\/?$/.test(u)) return u.endsWith('/') ? u : u + '/';
-  return u.replace(/\/$/, '') + '/specs/';
+  const m = /^(https?:\/\/[^/]+)\/view\/([^/?#]+)/i.exec(u);
+  if (m) return `${m[1]}/view/${m[2]}/specs/`;
+  return u.endsWith('/') ? u : u + '/';
 }
 
 /** Shell HTML'ini çeker. Token ASLA saklanmaz — her koşuda taze alınır. */
@@ -142,7 +155,12 @@ export async function fetchShare(url: string, timeoutMs = 60_000): Promise<Proto
     clearTimeout(timer);
   }
   if (!res.ok) {
-    throw redactedError(`XD linki ${res.status} döndü — link geçersiz veya yayından kaldırılmış.`);
+    // Adresi biz değiştirdiysek bunu SÖYLE — yoksa suç linke atılır.
+    const degistirildi = target !== url.trim();
+    throw redactedError(
+      `XD linki ${res.status} döndü — link geçersiz veya yayından kaldırılmış.` +
+        (degistirildi ? `\n  Denenen adres: ${target}\n  Verilen adres : ${url.trim()}` : '')
+    );
   }
   const ct = res.headers.get('content-type') ?? '';
   if (!ct.includes('text/html')) {

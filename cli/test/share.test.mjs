@@ -49,6 +49,24 @@ test('specs URL normalizasyonu', () => {
   assert.equal(normalizeShareUrl('https://xd.adobe.com/view/abc'), 'https://xd.adobe.com/view/abc/specs/');
   assert.equal(normalizeShareUrl('https://xd.adobe.com/view/abc/specs'), 'https://xd.adobe.com/view/abc/specs/');
   assert.equal(normalizeShareUrl('https://xd.adobe.com/view/abc/specs/'), 'https://xd.adobe.com/view/abc/specs/');
+  // Derin prototip linki de /specs/'e indirgenir.
+  assert.equal(
+    normalizeShareUrl('https://xd.adobe.com/view/abc/screen/xyz/'),
+    'https://xd.adobe.com/view/abc/specs/'
+  );
+});
+
+test('/view/ OLMAYAN biçimler OLDUĞU GİBİ denenir', () => {
+  // Ölçüldü: `https://xd.adobe.com/spec/<id>/grid/` canlı ve 200 dönüyor, ama
+  // sonuna `/specs/` eklenince 404 oluyordu — araç da "link geçersiz veya
+  // yayından kaldırılmış" deyip KULLANICIYI suçluyordu. Hata bizim ürettiğimiz
+  // adresteydi; körlemesine ek yapmak bir teşhis hatasıdır.
+  for (const u of [
+    'https://xd.adobe.com/spec/1f560469/grid/',
+    'https://xd.adobe.com/spec/1f560469/grid',
+  ]) {
+    assert.equal(normalizeShareUrl(u), 'https://xd.adobe.com/spec/1f560469/grid/');
+  }
 });
 
 test('prototypeData = null → LİNK HATASI teşhisi (sözleşme hatası DEĞİL)', () => {
