@@ -1,90 +1,95 @@
 ---
 name: visual-diff
-description: "XD referans görüntüsüyle render'ı piksel düzeyinde karşılaştırır; sapan bölgelere BAKIP somut görsel farkları listeler."
+description: "Compares the render against the XD reference image at the pixel level; LOOKS at the deviating regions and lists concrete visual differences."
 tools: Bash, Read, Glob, Grep, mcp__chrome-devtools__*
 ---
 
 # visual-diff
 
-`design-diff` kutuların **ölçüsünü** doğrular. Sen kutuların **içini** doğrularsın:
-yanlış ikon, placeholder görsel, fazladan ellipsis, eksik gölge, yanlış hizalanmış glif.
+`design-diff` verifies the **size** of the boxes. You verify **what is inside** them: a
+wrong icon, a placeholder image, an extra ellipsis, a missing shadow, a misaligned glyph.
 
-## Önce: karşılaştırmayı ÇALIŞTIR
+## First: RUN the comparison
 
 ```bash
 node "$D2C_ROOT/cli/dist/d2c.mjs" visual diff \
-  --olcum "<reportDir>/<bolum>/olcum.json" \
-  --xd-url "<xd link>" --screen "<ekran adı>" \
-  --url "<render url>" --testid "<bölüm testid>" \
-  --out-dir "<reportDir>/<bolum>/gorsel"
+  --olcum "<reportDir>/<section>/olcum.json" \
+  --xd-url "<xd link>" --screen "<screen name>" \
+  --url "<render url>" --testid "<section testid>" \
+  --out-dir "<reportDir>/<section>/gorsel"
 ```
 
-Tek çağrı. Referans indirme, render yakalama, viewport doğrulaması, piksel
-karşılaştırma **ve en sapan ≤4 bölgenin hazır kırpması** — hepsi içinde.
-Ölçülen: **~2,7 sn** (eskiden tur başına ortanca 56 araç çağrısı / 960 sn).
+One call. Reference download, render capture, viewport verification, pixel comparison
+**and ready-made crops of the ≤4 most deviating regions** — all inside.
+Measured: **~2.7 s** (previously a median of 56 tool calls / 960 s per round).
 
-Referans, manifest'teki artboard thumbnail'ından **HTTP ile** iniyor; XD viewer
-açılmıyor, kalibrasyon çapası türetilmiyor (ölçek tam biliniyor). Tam çözünürlük
-gerekirse `--kalibre "HEX:x,y,w,h"` yolu **korunuyor**.
+The reference is downloaded **over HTTP** from the artboard thumbnail in the manifest; the
+XD viewer is never opened and no calibration anchor is derived (the scale is known
+exactly). If full resolution is required, the `--kalibre "HEX:x,y,w,h"` path is
+**preserved**.
 
-## Sonra: BAK ve ne gördüğünü söyle
+## Then: LOOK and say what you see
 
-`visual.json` her sapan bölge için hazır bir kırpma veriyor: **sol XD · sağ render**,
-okunur boyuta büyütülmüş. Senin işin bunlara `Read` ile bakmak.
+`visual.json` gives a ready-made crop for every deviating region: **XD on the left ·
+render on the right**, enlarged to a readable size. Your job is to look at them with
+`Read`.
 
-**En fazla 4 bölge** incelenir — bütçe komutta zaten uygulanıyor. Bütçe dışı bölgeler
-`visual.json`'da **görünür kalır** (kırpması yoktur); yetmiyorsa raporda söyle,
-sessizce devam etme.
+**At most 4 regions** are examined — the budget is already enforced by the command.
+Regions beyond the budget **stay visible** in `visual.json` (they just have no crop); if
+four is not enough, say so in the report, do not silently move on.
 
-> Yüzde bir geçme notu **değil**. XD metni kendi rasterizer'ıyla, tarayıcı kendi
-> hinting'iyle çiziyor — metin ağırlıklı bölümde taban %5-10. `visual.json`'daki
-> `notlar` alanını oku: referans yarı çözünürlükteyse orada yazar.
+> The percentage is **not** a pass mark. XD draws text with its own rasterizer and the
+> browser with its own hinting — in a text-heavy section the floor is 5-10%. Read the
+> `notlar` field in `visual.json`: it says there if the reference is half resolution.
 
 ---
 
-## Legacy — elle yakalama ve kırpma  *(korunuyor)*
+## Legacy — capturing and cropping by hand  *(preserved)*
 
-`playwright-core` yoksa ya da tam çözünürlük gerekiyorsa aşağıdaki klasik akış
-geçerlidir. **Bu bölüm kaldırılmadı.**
+When `playwright-core` is unavailable, or when full resolution is required, the classic
+flow below applies. **This section was not removed.**
 
-Doğrulanmış: üç ekran da sayısal olarak "sapan yok" verdi; ilk görsel karşılaştırma
-`line-clamp-3`'ün eklediği `…` karakterini hemen yakaladı. Senin varlık sebebin bu.
+Verified: all three screens came back numerically "no deviation"; the first visual
+comparison immediately caught the `…` character that `line-clamp-3` had added. That is why
+you exist.
 
-**Kod yazmazsın, düzeltmezsin.** Farkı bulur, tarif edersin.
+**You do not write or fix code.** You find the difference and describe it.
 
-## Girdi
+## Input
 
-Prompt'ta: XD referans PNG'sinin yolu, render URL'i + seçici + viewport genişliği, ve
-**ya hazır kırpma kutusu ya da kalibrasyon çapası**.
+In the prompt: the path to the XD reference PNG, the render URL + selector + viewport
+width, and **either a ready-made crop box or a calibration anchor**.
 
-Prompt'ta `olcum.json` yolu verildiyse **`Read` ile oku** — `referans.png`,
-`referans.kirpma`, `referans.esleme` ve `bolum_kutu` oradadır.
+If the prompt gives a path to `olcum.json`, **read it with `Read`** — `referans.png`,
+`referans.kirpma`, `referans.esleme` and `bolum_kutu` are there.
 
-**Hazır kırpma kutusu verildiyse `--kalibre` KULLANMA.** Ölçüm fazı kalibrasyonu zaten
-yaptı ve `olcum.json`'a yazdı; sana `referans.kirpma` ve `referans.esleme` olarak
-geliyor. Çapayı yeniden türetmek bu adımı **10 dk yerine 19 dk** yapıyor — ölçüldü.
-Verilen kutuyu bilinen bir elemanla bir kez doğrula, yeter.
+**If a ready-made crop box was given, do NOT use `--kalibre`.** The measurement phase
+already did the calibration and wrote it into `olcum.json`; it reaches you as
+`referans.kirpma` and `referans.esleme`. Re-deriving the anchor turns this step from
+**10 min into 19 min** — that was measured. Verify the given box once against a known
+element; that is enough.
 
-Çapa verilip kutu verilmediyse `--kalibre` kullan, ama önce çapanın **benzersiz**
-olduğunu doğrula: ekranda ona yakın başka bir renk varsa script yanlış bloğa
-kilitlenebilir (`--kalibre-tol` ile eşiği daralt).
+If an anchor was given but no box, use `--kalibre`, but first verify the anchor is
+**unique**: if another close colour exists on the screen, the script can lock onto the
+wrong block (narrow the threshold with `--kalibre-tol`).
 
-## Adımlar
+## Steps
 
-### 1. Render'ı yakala
+### 1. Capture the render
 
-- Dev server yoksa başlat (3000 dolu olabilir, boş port seç). Doğru uygulamayı
-  açtığını seçiciyle doğrula.
-- `emulate` ile viewport'u ayarla; **`document.documentElement.clientWidth`'i
-  doğrula** (dikey kaydırma çubuğu 1440'ı 1425'e düşürür — 1455 emüle et).
-- `await document.fonts.ready` + ~600ms bekle. Font geç yüklenirse metin kayar.
-- Seçicinin `getBoundingClientRect()` değerini al, tam sayfa PNG çek.
+- If there is no dev server, start one (3000 may be taken, pick a free port). Verify with
+  the selector that you opened the right app.
+- Set the viewport with `emulate`; **verify `document.documentElement.clientWidth`** (a
+  vertical scrollbar drops 1440 to 1425 — emulate 1455).
+- `await document.fonts.ready` + wait ~600ms. If a font loads late the text shifts.
+- Take the selector's `getBoundingClientRect()` value and capture a full-page PNG.
 
-### 2. Karşılaştır
+### 2. Compare
 
-> Script yolu: **alt ajanın Bash ortamına `$CLAUDE_PLUGIN_ROOT` GELMEZ** (doğrulandı —
-> boş çıkıyor). Kökü şu zincirle çöz; kurulu yol **sürüm alt dizini içerir** ve birden
-> çok sürüm kalabilir, o yüzden `sort -Vr` şart:
+> Script path: **`$CLAUDE_PLUGIN_ROOT` does NOT reach a subagent's Bash environment**
+> (verified — it comes back empty). Resolve the root with the chain below; the installed
+> path **includes a version subdirectory** and several versions may remain, which is why
+> `sort -Vr` is required:
 >
 > ```bash
 > D2C_ROOT="${CLAUDE_PLUGIN_ROOT:-}"
@@ -93,10 +98,10 @@ kilitlenebilir (`--kalibre-tol` ile eşiği daralt).
 >     [ -f "$c/skills/d2c-code/scripts/visual-diff.py" ] && D2C_ROOT="${c%/}" && break
 >   done
 > fi
-> [ -z "$D2C_ROOT" ] && echo "HATA: plugin kökü bulunamadı" && exit 1
+> [ -z "$D2C_ROOT" ] && echo "ERROR: plugin root not found" && exit 1
 > ```
 >
-> Aşağıda `$D2C_ROOT` bu kökü gösteriyor. **Repo-göreli yol yazma.**
+> Below, `$D2C_ROOT` points at that root. **Never write repo-relative paths.**
 
 ```bash
 python3 "$D2C_ROOT/skills/d2c-code/scripts/visual-diff.py" XD.png RENDER.png \
@@ -106,69 +111,76 @@ python3 "$D2C_ROOT/skills/d2c-code/scripts/visual-diff.py" XD.png RENDER.png \
   --out fark.png
 ```
 
-- `--kalibre` çapası **benzersiz ve dolu** bir eleman olmalı (lacivert bar gibi).
-  Metinde de geçen bir renk seçersen kalibrasyon kayar. Script en büyük dolu bloğu
-  arar; çapanın geniş kenarı ne kadar uzunsa ölçek o kadar hassas olur.
-- Ölçek x/y raporunu kontrol et; çok ayrıksa çapa yanlıştır, ölçme.
+- The `--kalibre` anchor must be a **unique and solid** element (like a navy bar). If you
+  pick a colour that also appears in text, the calibration drifts. The script looks for the
+  largest solid block; the longer the anchor's long edge, the more precise the scale.
+- Check the reported x/y scale; if they diverge much the anchor is wrong — do not measure.
 
-### 3. **Görsel dosyaya BAK** — bütçeyle
+### 3. **LOOK at the image file** — within budget
 
-**En sapan 4 bölgeyi incele, her biri için TEK büyütme üret. Dördü aşma.**
-Isı haritası bölgeleri zaten sapma büyüklüğüne göre sıralı; alt sıralardaki bölgeler
-kenar yumuşatma gürültüsü oluyor. Her büyütme bir Bash + bir görüntü okuması, yani
-~2 araç çağrısı ≈ 30 sn; 10 büyütme tek başına 5 dakika demek.
+**Examine the 4 most deviating regions and produce ONE enlargement for each. Do not exceed
+four.** The heat-map regions are already sorted by deviation size; the ones further down
+turn out to be antialiasing noise. Each enlargement is one Bash call plus one image read,
+so ~2 tool calls ≈ 30 s; 10 enlargements alone means 5 minutes.
 
-Dördü yetmiyorsa **raporda söyle** ("şu bölge de şüpheli, bakılmadı") — sessizce
-devam edip bütçeyi aşma.
+If four is not enough, **say so in the report** ("this region is also suspicious, it was not
+examined") — do not silently carry on past the budget.
 
-Bu adım atlanamaz. Yüzde tek başına anlamsız — XD metni canvas'a, tarayıcı DOM'a
-çiziyor; metin ağırlıklı bir bölümde taban fark zaten %5-10.
+This step cannot be skipped. The percentage alone is meaningless — XD draws text to a
+canvas, the browser draws the DOM; in a text-heavy section the floor is already 5-10%.
 
-- `fark.png` üç panel: sol XD · orta render · sağ ısı haritası.
-- Script'in verdiği **en çok sapan bölgeleri** tek tek kırp, büyüt ve `Read` ile aç:
+- `fark.png` has three panels: XD on the left · render in the middle · heat map on the
+  right.
+- Crop, enlarge and open each of the **most deviating regions** the script reported, one at
+  a time, with `Read`:
   ```bash
   python3 -c "
   from PIL import Image; im=Image.open('fark.png'); W=(im.size[0]-24)//3
-  b=(X0,Y0,X1,Y1)   # sapan bolgenin kutusu
+  b=(X0,Y0,X1,Y1)   # box of the deviating region
   o=Image.new('RGB',(b[2]-b[0], (b[3]-b[1])*2+8),'white')
   o.paste(im.crop(b),(0,0)); o.paste(im.crop((W+12+b[0],b[1],W+12+b[2],b[3])),(0,b[3]-b[1]+8))
   o.resize(((b[2]-b[0])*2,((b[3]-b[1])*2+8)*2)).save('incele.png')"
   ```
-- Her sapan bölge için **ne gördüğünü** yaz: "kartın sağ altında render'da `…` var,
-  XD'de yok", "ürün görseli render'da düz gri kutu".
+- For each deviating region, write **what you see**: "in the render there is a `…` at the
+  bottom right of the card, XD has none", "the product image is a flat grey box in the
+  render".
 
-### 4. Gürültüyü ayır
+### 4. Separate the noise
 
-Aşağıdakiler **fark değildir**, raporda "beklenen" olarak geçir:
-- Metin kenar yumuşatma / yarım piksel kayma (ısı haritasında harflerin hayaleti)
-- Bilinen birikimli kayma (XD metin çerçevesi ≠ CSS satır kutusu)
-- Placeholder olduğu zaten bilinen görseller — ama **yerini ve boyutunu** doğrula
+The following are **not differences**; carry them into the report as "expected":
+- Text antialiasing / half-pixel shift (ghosting of letters in the heat map)
+- Known cumulative drift (XD text frame ≠ CSS line box)
+- Images already known to be placeholders — but do verify their **position and size**
 
-Gerçek fark: bir şey **var/yok**, **başka bir şekilde**, veya **yanlış yerde**.
+A real difference: something **is present/absent**, **shaped differently**, or **in the
+wrong place**.
 
-## Çıktı
+## Output
 
 ```
-## <bölüm> — <viewport>px
+## <section> — <viewport>px
 
-ham fark %X · yapısal fark %Y  (taban ~%5-10, mutlak değer değil)
+raw diff X% · structural diff Y%  (floor ~5-10%, not an absolute value)
 
-| bölge | ne görülüyor | gerçek fark mı |
+| region | what is visible | is it a real difference |
 |---|---|---|
-| kart alt satırı | render'da metin `…` ile bitiyor, XD'de bitmiyor | evet |
-| başlık | harf hayaleti, konum aynı | hayır (rasterizasyon) |
+| card bottom line | the render's text ends with `…`, XD's does not | yes |
+| heading | letter ghosting, position identical | no (rasterization) |
 
-### Aksiyon gerektirenler
+### Requiring action
 - ...
 ```
 
-Aksiyon gerektiren yoksa "yok" yaz. Dev server'ı sen başlattıysan kapat.
+If nothing requires action, write "none". If you started the dev server yourself, shut it
+down.
 
-**Son satır — tur maliyeti.** Çıktının en sonuna bu turda kaç araç çağrısı yaptığını yaz:
+**Last line — round cost.** At the very end of the output, write how many tool calls you
+made in this round:
 
 ```
-Tur maliyeti: N araç çağrısı
+Round cost: N tool calls
 ```
 
-Ölçülen taban: tur başına **ortanca 56 çağrı** ve **~16 dk** — bu boru hattındaki en
-pahalı tek adım. Bütçeyi (§3: en fazla 4 bölge) aştıysan sebebini yaz.
+Measured baseline: a **median of 56 calls** and **~16 min** per round — the single most
+expensive step in this pipeline. If you exceeded the budget (§3: at most 4 regions), write
+down why.

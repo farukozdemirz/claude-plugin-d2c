@@ -1,19 +1,20 @@
-# XD spec playbook → taşındı
+# XD spec playbook → moved
 
-Bu dosyanın içeriği **`docs/xd-viewer-notlari.md`**'ye taşındı.
+The contents of this file moved to **`docs/xd-viewer-notes.md`**.
 
-**Neden:** normal akış artık XD viewer'ı hiç açmıyor — çıkarma HTTP + AGC scenegraph
-ile, görsel referans manifest thumbnail'ı ile yapılıyor. 247 satırlık tarayıcı sürme
-talimatını her ölçümde skill bağlamına yüklemek gereksiz maliyetti.
+**Why:** the normal flow no longer opens the XD viewer at all — extraction goes through
+HTTP + the AGC scenegraph, and the visual reference comes from the manifest thumbnail.
+Loading 247 lines of browser-driving instructions into the skill context on every
+measurement was an unnecessary cost.
 
-**İçerik silinmedi.** 25 maddenin tamamı orada; hangisinin nereye gittiği
-(kural / koda gömüldü / kaynak veriden geliyor / arşiv) dosyanın başındaki tabloda.
+**Nothing was deleted.** All 25 items are there; the table at the top of that file records
+where each one went (rule / embedded in code / comes from the source data / archive).
 
-## Ne zaman okunur
+## When to read it
 
-`.d2c.json` içinde `extractorStrategy: "legacy"` ise **veya** ağ yolu sözleşme hatası
-verdiyse. O durumda ölçüm hâlâ oradaki yöntemle yapılır:
+When `.d2c.json` has `extractorStrategy: "legacy"`, **or** when the network path reported
+a contract error. In that case measurement still follows the method described there:
 
 ```
-$D2C_ROOT/docs/xd-viewer-notlari.md
+$D2C_ROOT/docs/xd-viewer-notes.md
 ```

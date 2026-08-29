@@ -1,118 +1,128 @@
 ---
 name: d2c-spec
-description: "Adobe XD view/specs linkinden ekran ve bölüm ölçümlerini çıkarır; olcum.json + spec.md üretir. Varsayılan yol tarayıcısızdır (ağ tabanlı); legacy yol chrome-devtools MCP ile çalışmaya devam eder."
-argument-hint: <xd-link> [ne ölçüleceği]
+description: "Extracts screen and section measurements from an Adobe XD view/specs link; produces olcum.json + spec.md. The default path is browserless (network based); the legacy path keeps working through chrome-devtools MCP."
+argument-hint: <xd-link> [what to measure]
 ---
 
 # d2c-spec
 
-XD paylaşım linkinden ölçüm çıkarır. **Argüman:** ilk kelime XD linki, kalanı serbest
-görev tarifi (opsiyonel).
+Extracts measurements from an XD share link. **Argument:** the first word is the XD link,
+the rest is a free-form task description (optional).
 
-## Hangi yol
+## Which path
 
-`.d2c.json` içindeki `extractorStrategy` belirler (varsayılan `auto`):
+Decided by `extractorStrategy` in `.d2c.json` (default `auto`):
 
-| Değer | Davranış |
+| Value | Behaviour |
 |---|---|
-| `auto` (varsayılan) | Ağ yolu. Sözleşme bozuksa **teşhisle durur** ve legacy'ye geçmeyi önerir |
-| `network` | Yalnız ağ yolu |
-| `legacy` | 1.4.0 davranışı: chrome-devtools MCP + `$D2C_ROOT/docs/xd-viewer-notlari.md` |
+| `auto` (default) | Network path. If the contract is broken it **stops with a diagnosis** and suggests switching to legacy |
+| `network` | Network path only |
+| `legacy` | 1.4.0 behaviour: chrome-devtools MCP + `$D2C_ROOT/docs/xd-viewer-notes.md` |
 
 ---
 
-## Ağ yolu (varsayılan) — tarayıcı YOK
+## Network path (default) — NO browser
 
-Üç komut. Ölçüm için XD viewer açılmaz, tıklama yapılmaz, kalibrasyon gerekmez.
+Three commands. The XD viewer is never opened, nothing is clicked, no calibration is
+needed.
 
 ```bash
-D2C="$D2C_ROOT/cli/dist/d2c.mjs"          # kök çözümü için aşağıya bak
-R="<reportDir>"                            # .d2c.json'dan
+D2C="$D2C_ROOT/cli/dist/d2c.mjs"          # see below for root resolution
+R="<reportDir>"                            # from .d2c.json
 
-# 1) ekranı çıkar (desktop + mobil birlikte, ~1 sn)
-node "$D2C" xd extract "<xd-link>" --screen "<ekran adı|id>" -o "$R/design.json"
+# 1) extract the screen (desktop + mobile together, ~1 s)
+node "$D2C" xd extract "<xd-link>" --screen "<screen name|id>" -o "$R/design.json"
 
-# 2) bölüm haritası
+# 2) section map
 node "$D2C" sections --design "$R/design.json" --json -o "$R/bolum-haritasi.json"
 
-# 3) seçilen bölümün ölçümü → olcum.json + spec.md
-node "$D2C" spec --design "$R/design.json" --section <no|slug> --out-dir "$R/<bolum-slug>"
+# 3) measurement for the chosen section → olcum.json + spec.md
+node "$D2C" spec --design "$R/design.json" --section <no|slug> --out-dir "$R/<section-slug>"
 ```
 
-Ekran adını bilmiyorsan önce listele: `node "$D2C" xd inspect "<xd-link>"`
+If you do not know the screen name, list them first:
+`node "$D2C" xd inspect "<xd-link>"`
 
-### Çıktılar ve **kim neyi okur**
+### Outputs and **who reads what**
 
-| Dosya | Kim okur |
+| File | Read by |
 |---|---|
-| `design.json` | **Yalnız araçlar.** Tam scenegraph, ekran başına yüzlerce KB. **Claude bunu AÇMAZ.** |
-| `olcum.json` | **Claude.** Bölüm kapsamlı, kendi içinde yeterli: kutu · spacing · radius · renk · kontur · tipografi · metin · eleman ilişkileri |
-| `spec.md` | İnsan |
+| `design.json` | **Tools only.** The full scenegraph, hundreds of KB per screen. **Claude does NOT open it.** |
+| `olcum.json` | **Claude.** Section-scoped and self-contained: box · spacing · radius · colour · stroke · typography · text · element relationships |
+| `spec.md` | Humans |
 
-Bu sınır değişmez. `design.json`'ı bağlama sokmak, ölçüm maliyetini araç çağrısından
-token'a taşımak olur — sorunu çözmek değil, yer değiştirmek.
+This boundary does not move. Pulling `design.json` into context would shift the cost of
+measurement from tool calls to tokens — relocating the problem, not solving it.
 
-### `olcum.json` hakkında bilinmesi gerekenler
+### What you need to know about `olcum.json`
 
-- **`testid` başta `null`.** Kod fazı doldurur (`d2c-code` §3). Doldurulmadan
-  doğrulama ajanı bu dosyayı kullanamaz.
-- **`d2c spec` yeniden çalıştırılırsa `testid`'ler korunur** — eleman `id`'sine göre
-  taşınır. Sıfırlamak için `--force`. Taşınamayan varsa `cozulemedi`'ye yazılır.
-- **`tekrar` alanı sıkıştırılmış diziyi anlatır:** `adet` · düzenliyse `eksen`+`adim`
-  (veya ızgarada `sutun`/`satir`/`adimX`/`adimY`), düzensizse `duzenli:false` +
-  `konumlar` (tüm konumlar korunur, bilgi kaybı yok). 8 özdeş kart tek kayıt olur.
-- **`hesaplanan`** boşlukları **adım başına bir kez** verir ve her kayıt `nasil`
-  alanıyla kaynağını söyler.
-- **`font.fontKutusuAgc` HAM AGC değeridir ve KULLANILMAZ.** `fontKutusuKaynak`
-  `"tarayici"` gelir, `yariSatir` `null`'dur: yarı-satır telafisi için font kutusu
-  **kod fazında tarayıcıda ölçülür** (`d2c-code` §3). Ölçüldü — AGC değeri Bw Modelica'da
-  Chrome ile birebir tutuyor ama Tobias TRIAL 48px'te 10px sapıyor ve yarı-satırın
-  işaretini değiştiriyor.
-- Radius kaynağı `rect` veya `yol` ise kaynak veriden birebir gelmiştir (`P` sayılır).
-  `bilinmiyor` ise **çıkarılamamıştır** — uydurulmamıştır, raporda öyle geçer.
+- **`testid` starts out `null`.** The code phase fills it in (`d2c-code` §3). Until it is
+  filled, the verification agent cannot use this file.
+- **Re-running `d2c spec` preserves the `testid`s** — they are carried over by element
+  `id`. Use `--force` to reset them. Anything that could not be carried over is written
+  into `cozulemedi`.
+- **The `tekrar` field describes a compressed series:** `adet` · when regular,
+  `eksen`+`adim` (or on a grid `sutun`/`satir`/`adimX`/`adimY`), when irregular
+  `duzenli:false` + `konumlar` (all positions preserved, no information lost). Eight
+  identical cards become a single record.
+- **`hesaplanan`** reports gaps **once per step**, and every record states its origin in
+  the `nasil` field.
+- **`font.fontKutusuAgc` is the RAW AGC value and is NOT used.** `fontKutusuKaynak` comes
+  back as `"tarayici"` and `yariSatir` is `null`: for half-line compensation the font box
+  is **measured in the browser during the code phase** (`d2c-code` §3). This was measured
+  — the AGC value matches Chrome exactly for one family but is off by 10px at 48px for
+  another, which flips the sign of the half-line.
+- If the radius source is `rect` or `yol`, it came verbatim from the source data (counts
+  as `P`). If it is `bilinmiyor`, it **could not be derived** — it was not invented, and
+  the report says so.
 
-### Sözleşme bozulursa
+### If the contract breaks
 
-`xd inspect` / `xd extract` teşhisle durur. İki durum ayrıdır:
+`xd inspect` / `xd extract` stop with a diagnosis. Two cases are distinct:
 
-- **"XD linki geçersiz veya erişilemiyor"** → link yazım hatası, kaldırılmış paylaşım
-  veya public olmayan link. Kullanıcıya sor.
-- **"XD paylaşım sözleşmesi değişmiş olabilir"** → Adobe tarafı değişmiş.
-  `extractorStrategy: "legacy"` ile aşağıdaki yola geç ve durumu bildir.
+- **"XD linki geçersiz veya erişilemiyor"** → a typo in the link, a withdrawn share, or a
+  non-public link. Ask the user.
+- **"XD paylaşım sözleşmesi değişmiş olabilir"** → something changed on Adobe's side.
+  Switch to the path below with `extractorStrategy: "legacy"` and report the situation.
 
 ---
 
-## Legacy yol — chrome-devtools MCP  *(korunuyor)*
+## Legacy path — chrome-devtools MCP  *(preserved)*
 
-`extractorStrategy: "legacy"` ise veya ağ yolu sözleşme hatası verdiyse kullanılır.
+Used when `extractorStrategy: "legacy"`, or when the network path reported a contract
+error.
 
-**İlk iş:** `$D2C_ROOT/docs/xd-viewer-notlari.md`'yi oku. Oradaki 25 madde gerçek bir oturumda
-doğrulanmıştır — alternatiflerini deneme (özellikle MCP `click`, klavye/scroll pan).
+**First thing:** read `$D2C_ROOT/docs/xd-viewer-notes.md`. The 25 items there were
+verified in a real session — do not try alternatives (especially MCP `click`, or
+keyboard/scroll panning).
 
-1. **Önkoşul.** `mcp__chrome-devtools__*` yoksa dur ve söyle:
+1. **Prerequisite.** If `mcp__chrome-devtools__*` is unavailable, stop and say:
    `claude mcp add chrome-devtools -- npx -y chrome-devtools-mcp@latest --isolated`
-2. **Aç ve hazırla** (`xd-viewer-notlari.md` §2-4) → **snapshot** (§5) → **kalibrasyon** (§24, tek çağrı)
-3. **Ölç** — elemanları tıklayıp panelden oku (§8-11), boşlukları kutu farkından
-   hesapla (§14), probe'ları **toplu** yap (§10)
-4. **Referansı burada yakala** (§23): dpr 2 + zoom %50, **seçimi kaldır**, PNG'ye al
-5. **Raporla** — aynı iki dosya: `olcum.json` + `spec.md`
+2. **Open and prepare** (`xd-viewer-notes.md` §2-4) → **snapshot** (§5) →
+   **calibration** (§24, a single call)
+3. **Measure** — click elements and read the panel (§8-11), compute gaps from box
+   differences (§14), run probes **in batches** (§10)
+4. **Capture the reference here** (§23): dpr 2 + zoom 50%, **clear the selection**, save
+   as PNG
+5. **Report** — the same two files: `olcum.json` + `spec.md`
 
-> Legacy yolda `olcum.json` elle doldurulur; şeması ağ yolununkiyle aynıdır
-> (`cli/src/contracts/olcum.ts`). `kalibrasyon` ve `referans` alanları bu yolda
-> anlamlıdır ve doldurulmalıdır.
+> On the legacy path `olcum.json` is filled in by hand; its schema is identical to the
+> network path's (`cli/src/contracts/olcum.ts`). The `kalibrasyon` and `referans` fields
+> are meaningful on this path and must be populated.
 
 ---
 
-## Görsel referans
+## Visual reference
 
-**Ağ yolunda burada bir şey yapman gerekmiyor.** `d2c visual diff` referansı
-manifest'teki artboard thumbnail'ından **HTTP ile** indiriyor; ölçek tam 0,5 olduğu
-için kalibrasyon çapası türetilmiyor ve XD viewer açılmıyor.
+**On the network path you do not need to do anything here.** `d2c visual diff` downloads
+the reference **over HTTP** from the artboard thumbnail in the manifest; because the scale
+is exactly 0.5 no calibration anchor is derived and the XD viewer is never opened.
 
-Legacy yolda referans hâlâ elle yakalanır (`xd-viewer-notlari.md` §23: dpr 2 +
-zoom %50, seçimi kaldır) ve `olcum.json`'daki `referans` alanına yazılır.
+On the legacy path the reference is still captured by hand (`xd-viewer-notes.md` §23:
+dpr 2 + zoom 50%, clear the selection) and written into the `referans` field of
+`olcum.json`.
 
-## Script yolları
+## Script paths
 
 ```bash
 D2C_ROOT="${CLAUDE_PLUGIN_ROOT:-}"
@@ -122,12 +132,13 @@ if [ -z "$D2C_ROOT" ]; then
     [ -f "$c/cli/dist/d2c.mjs" ] && D2C_ROOT="${c%/}" && break
   done
 fi
-[ -z "$D2C_ROOT" ] && echo "HATA: plugin kökü bulunamadı" && exit 1
+[ -z "$D2C_ROOT" ] && echo "ERROR: plugin root not found" && exit 1
 ```
 
-## Rapor formatı (`spec.md`)
+## Report format (`spec.md`)
 
-Ağ yolunda otomatik üretilir. Legacy yolda elle yazılır; içerik aynı olmalı:
-ekran · renk paleti · character styles · ölçülen elemanlar tablosu · hesaplanan
-boşluklar (hangi iki kutudan türediğiyle) · kabul edilen sapmalar · çözülemedi.
-**Okunan ile hesaplanan ayrı işaretlenir.**
+Generated automatically on the network path. Written by hand on the legacy path; the
+content must be the same: screen · colour palette · character styles · table of measured
+elements · computed gaps (with the two boxes they were derived from) · accepted
+deviations · unresolved items.
+**Read values and computed values are marked separately.**

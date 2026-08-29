@@ -1,73 +1,76 @@
-# Ekran ayrıştırma
+# Screen segmentation
 
-Artboard'ı bölümlere ayırmanın doğrulanmış yöntemi. İki ekranda test edildi:
-"Desktop - Ekran A" (5/24) ve "Desktop - Ekran B" (6/24).
+The verified method for splitting an artboard into sections. Tested on two screens:
+"Desktop - Screen A" (5/24) and "Desktop - Screen B" (6/24).
 
-## Hızlı yol — `d2c sections` (1.5.0+)
+## Fast path — `d2c sections` (1.5.0+)
 
-`design.json` hazırsa bölüm haritası **tek komutla, tarayıcı olmadan** çıkar:
+When `design.json` is ready, the section map comes out in **one command, with no browser**:
 
 ```bash
-node "$D2C_ROOT/cli/dist/d2c.mjs" xd extract "<xd-link>" --screen "<ekran>" -o design.json
+node "$D2C_ROOT/cli/dist/d2c.mjs" xd extract "<xd-link>" --screen "<screen>" -o design.json
 node "$D2C_ROOT/cli/dist/d2c.mjs" sections --design design.json --json -o bolum-haritasi.json
 ```
 
-Aşağıdaki yöntemin **aynısını** uygular; farkı, iki sinyalin de scenegraph'tan gelmesi:
-tam genişlik bantları probe yerine geometriden, boş satır analizi ekran görüntüsü yerine
-eleman kutularından. Kalibrasyon gerekmez.
+It applies **the same** method described below; the difference is that both signals come
+from the scenegraph: full-width bands from geometry instead of probes, and blank-row
+analysis from element boxes instead of a screenshot. No calibration is needed.
 
-Doğrulama (ekran 5/24, gerçek koşunun bölüm haritasına karşı): **4 bandın 4'ü birebir**
-(y, h, ad, renk), bölüm sayısı aynı (11), bant bölümlerinin sınırları birebir, boşluk
-türevli sınırlar **≤ 5 px** sapıyor. Sapmanın sebebi: eski yöntem ekran görüntüsündeki
-*mürekkebi*, yeni yöntem eleman *kutularını* kullanıyor; metin çerçevesi mürekkepten
-biraz taşar.
+Verification (screen 5/24, against the section map of a real run): **4 of 4 bands match
+exactly** (y, h, name, colour), the section count is the same (11), band section boundaries
+match exactly, and gap-derived boundaries differ by **≤ 5 px**. The reason for the
+deviation: the old method uses the *ink* in a screenshot, the new one uses element *boxes*;
+a text frame extends slightly beyond the ink.
 
-Ekran 6/24'ün üç bandı da (@Y0 h69 · @Y69 h504 · @Y573 h2452.89 `#F9FAFB`) birebir çıkıyor.
+All three bands of screen 6/24 (@Y0 h69 · @Y69 h504 · @Y573 h2452.89 `#F9FAFB`) come out
+exactly.
 
-> **Aşağıdaki probe yöntemi kaldırılmadı.** `extractorStrategy: "legacy"` ile hâlâ
-> geçerlidir ve `d2c sections` bir tasarımda anlamlı sonuç vermezse başvurulacak yoldur.
+> **The probe method below was not removed.** It is still valid with
+> `extractorStrategy: "legacy"`, and it is the fallback when `d2c sections` produces a
+> meaningless result for a design.
 
 ---
 
-## Legacy yol — XD probe + ekran görüntüsü
+## Legacy path — XD probe + screenshot
 
-## Neden probe ile başlık avlanmıyor
+## Why headings are not hunted with probes
 
-İlk denenen yöntem, içerik sütununda aşağı doğru tıklayıp büyük puntolu `Text`
-elemanlarını toplamaktı. **Çalışmadı:** 110px'lik adımla 56px yüksekliğindeki
-"Bölüm Başlığı" başlığı iki probe'un arasına düşüp kaçtı. Adımı 40'a indirmek
-190+ tıklama demek (~100 sn) ve hâlâ garanti değil.
+The first method tried was clicking downward through the content column and collecting
+large-point `Text` elements. **It did not work:** with a 110px step, the 56px-tall
+"Section Title" heading fell between two probes and was missed. Dropping the step to 40
+means 190+ clicks (~100 s) and still guarantees nothing.
 
-Çalışan yöntem iki sinyali birleştiriyor:
-1. **Tam genişlik zemin dikdörtgenleri** (XD probe) — otoriter bölüm sınırları
-2. **Boş satır analizi** (tek ekran görüntüsü) — bantsız bölgeleri böler
+The method that works combines two signals:
+1. **Full-width background rectangles** (XD probe) — authoritative section boundaries
+2. **Blank-row analysis** (a single screenshot) — splits the regions with no band
 
-## 1. Kalibrasyon — tasarım ↔ viewport
+## 1. Calibration — design ↔ viewport
 
-Zoom textbox'ı **%25'in altına inmiyor** (20/15/12 yazsan da 25'te kalıyor).
-1440×3778'lik bir artboard %25'te 360×944.5 viewport px eder; tamamının görünmesi için
-pencereyi yükselt (`resize_page` 1600×1400 → iç yükseklik ~1297) ve artboard üstü ~90'a
-gelecek şekilde pan yap.
+The zoom textbox **will not go below 25%** (type 20/15/12 and it stays at 25).
+A 1440×3778 artboard at 25% is 360×944.5 viewport px; to see all of it, make the window
+taller (`resize_page` 1600×1400 → inner height ~1297) and pan so the top of the artboard
+lands at ~90.
 
-Ölçek zoom'dan bilinir (`s = zoom/100`); gereken tek şey **offset**. Artboard kenarını
-ikili aramayla bul — içerideyken panel eleman verir, dışarıdayken "Screen Details":
+The scale is known from the zoom (`s = zoom/100`); the only thing needed is the **offset**.
+Find the artboard edge with a binary search — inside, the panel returns an element;
+outside, it says "Screen Details":
 
 ```js
 const ici = async (x, y) => (await probe(x, y)) !== null;
 let lo = 0, hi = refY;
 while (hi - lo > 1) { const m = (lo + hi) >> 1; if (await ici(refX, m)) hi = m; else lo = m; }
-const ustV = hi;                       // design y=0 buraya düşer
-// aynısı x için → solV
+const ustV = hi;                       // design y=0 lands here
+// the same for x → solV
 const dx = (x) => solV + x * s, dy = (y) => ustV + y * s;
 ```
 
-~20 tıklama sürer, deterministiktir.
+It takes ~20 clicks and is deterministic.
 
-## 2. Tam genişlik bant taraması
+## 2. Full-width band scan
 
-Sol kenar şeridinde (tasarım x ≈ 8) aşağı doğru 90 px adımlarla tıkla; genişliği
-artboard genişliğinin **%90'ından büyük** olan elemanları topla. Artboard'ın kendisini
-ele (w == tasarım genişliği **ve** h == tasarım yüksekliği).
+Click downward in the left edge strip (design x ≈ 8) in 90 px steps; collect elements whose
+width is greater than **90% of the artboard width**. Exclude the artboard itself
+(w == design width **and** h == design height).
 
 ```js
 for (let dy = 15; dy < DH; dy += 90) {
@@ -76,16 +79,17 @@ for (let dy = 15; dy < DH; dy += 90) {
 }
 ```
 
-Doğrulanmış çıktı — ekran 5: `Rectangle B` 1440×34 @Y0 · `Rectangle C` 1440×96 @Y34 ·
-`Path A` 1440×69 @Y179 · **`Rectangle A` 1440×730 @Y2923** (yorumlar bandı).
-Ekran 6: `Rectangle D` @Y0 h69 · `Rectangle E` @Y69 h504 · **`Rectangle F` @Y573
-h2452.89** (`#F9FAFB` bölüm zemini).
+Verified output — screen 5: `Rectangle B` 1440×34 @Y0 · `Rectangle C` 1440×96 @Y34 ·
+`Path A` 1440×69 @Y179 · **`Rectangle A` 1440×730 @Y2923** (the reviews band).
+Screen 6: `Rectangle D` @Y0 h69 · `Rectangle E` @Y69 h504 · **`Rectangle F` @Y573
+h2452.89** (`#F9FAFB` section background).
 
-## 3. Boş satır analizi
+## 3. Blank-row analysis
 
-Artboard'ın ekran görüntüsünü al, `$D2C_ROOT/skills/d2c/scripts/section-map.py`'a kalibrasyon kutusuyla
-birlikte ver. Script içerik sütununda (gutter içeride) tek renkli satır koşularını
-bulur; eşikten uzun her koşu ayraçtır.
+Take a screenshot of the artboard and pass it to
+`$D2C_ROOT/skills/d2c/scripts/section-map.py` together with the calibration box. The
+script finds runs of single-colour rows inside the content column (gutters excluded); every
+run longer than the threshold is a separator.
 
 ```bash
 python3 "$D2C_ROOT/skills/d2c/scripts/section-map.py" artboard.png \
@@ -93,28 +97,30 @@ python3 "$D2C_ROOT/skills/d2c/scripts/section-map.py" artboard.png \
   --bantlar '[{"y":2923,"h":730,"ad":"Rectangle A"}]'
 ```
 
-**Bantlar otoriterdir:** bir bandın içindeki boşluk sınırları yok sayılır (bant tek
-bölümdür), bant kenarları her zaman sınırdır. Bantsız verilirse yorumlar bandı üç
-parçaya bölünüyordu (başlık / kartlar / oklar) — bant bilgisiyle tek bölüm oluyor.
+**Bands are authoritative:** gap boundaries inside a band are ignored (a band is a single
+section), and band edges are always boundaries. Without band information the reviews band
+was split into three pieces (heading / cards / arrows) — with it, it becomes one section.
 
-## 4. İsimlendirme
+## 4. Naming
 
-Her bölümün **üst üçte birinde**, birkaç sütunda tıkla; en büyük puntolu `Text` kazanır.
+In the **top third** of each section, click across a few columns; the largest-point `Text`
+wins.
 
-- Sütunlar: sol gutter (x≈80), orta (x≈DW/2), sağ-orta (x≈0.55·DW).
-  Üçüncü sütun şart: "sağ kolonda duran uzun başlık" sağ kolonda ve iki
-  sütunla arandığında bulunamıyordu.
-- Adım sayısı bölüm yüksekliğiyle orantılı, 2-6 arası.
+- Columns: left gutter (x≈80), middle (x≈DW/2), right-of-middle (x≈0.55·DW).
+  The third column is essential: a "long heading sitting in the right column" was in the
+  right column and could not be found when searching only two columns.
+- The number of steps is proportional to the section height, between 2 and 6.
 
-Doğrulanmış: bölüm 10 → `"Bölüm Başlığı" (48px)`, bölüm 6 → `"uzun başlıklı bölüm" (64px)`, bölüm 8 → `"kısa başlıklı bölüm" (30px)`.
+Verified: section 10 → `"Section Title" (48px)`, section 6 → `"section with a long
+heading" (64px)`, section 8 → `"section with a short heading" (30px)`.
 
-## 5. Bilinen sınırlar
+## 5. Known limits
 
-- **Görselden ibaret bölümler isimsiz kalır** (ekran 5 bölüm 5, 9, 11). Harita yine
-  doğru sınırları verir; kullanıcı Y aralığından seçer.
-- **Yatay ayrıştırma yok.** Bir bölümün içindeki kolonlar ayrılmıyor; bölüm tek parça
-  olarak `/d2c-code`'a gider ve orada ölçülür.
-- Boş satır eşiği (`--bosluk`, vars. 40 tasarım px) tasarıma göre ayarlanabilir;
-  sıkışık tasarımlarda düşür, ferah tasarımlarda yükselt.
-- Yöntem **dikey akan sayfalar** içindir. Serbest yerleşimli artboard'larda (dashboard,
-  harita) anlamlı sonuç vermez.
+- **Sections that are nothing but an image stay unnamed** (screen 5, sections 5, 9, 11).
+  The map still gives the correct boundaries; the user picks by Y range.
+- **No horizontal segmentation.** Columns inside a section are not separated; the section
+  goes to `/d2c-code` as one piece and is measured there.
+- The blank-row threshold (`--bosluk`, default 40 design px) can be tuned per design; lower
+  it for dense designs, raise it for airy ones.
+- The method is for **vertically flowing pages**. On freely laid out artboards (dashboards,
+  maps) it does not give a meaningful result.

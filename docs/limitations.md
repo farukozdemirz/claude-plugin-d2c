@@ -1,129 +1,136 @@
-# Sınırlar — aracın YAPAMADIKLARI
+# Limits — what the tool CANNOT do
 
-Bu liste kısaltılmaz. Bu araca güveni yaratan şey ne yaptığı değil, **ne
-yapmadığının yazılı olması.** Bir sınırla karşılaşan geliştirici burada bulamazsa
-araca güvenmeyi bırakır.
+This list is never shortened. What makes this tool trustworthy is not what it does, but
+**that what it does not do is written down.** A developer who hits a limit and cannot find
+it here stops trusting the tool.
 
-> **1.8.0 notu — bu listenin bir kısmı artık geçerli değil.** Ölçüm ağ tabanlı
-> çıkarmaya (AGC scenegraph) geçtiği için aşağıdaki bazı maddeler çözüldü ya da
-> çözülebilir hale geldi. **Hiçbiri silinmedi**; çözülenler `✅ ÇÖZÜLDÜ` ile
-> işaretlendi ve gerekçesi yazıldı. Liste kısaltılmaz — bu araca güveni yaratan şey
-> ne yapmadığının yazılı olması.
+> **1.8.0 note — part of this list no longer applies.** Because measurement moved to
+> network-based extraction (the AGC scenegraph), some of the entries below were solved or
+> became solvable. **None were deleted**; solved items are marked `✅ ÇÖZÜLDÜ` (solved)
+> with the reasoning. The list is never shortened — what makes this tool trustworthy is
+> that its limits are written down.
 
-## Export edemedikleri  *(çoğu 1.10.0'da çözüldü)*
+## What it cannot export  *(most of this was solved in 1.10.0)*
 
-Hâlâ export edilemeyenler: **gradient dolgular** ve **maske/clipPath** birleştirmesi.
-İkisi de sessizce atlanmıyor — `d2c xd assets` bunları `atlananlar[]` olarak
-sebebiyle raporluyor (ölçüldü: bir ekranda 2 gradient düğümü).
+Still not exportable: **gradient fills** and **mask/clipPath** compositing. Neither is
+skipped silently — `d2c xd assets` reports them in `atlananlar[]` with a reason (measured:
+2 gradient nodes on one screen).
 
-- ~~**Boolean şekiller (`compound`).**~~ **✅ ÇÖZÜLDÜ (1.12.1)** — XD'de birleştirilmiş
-  (union/exclude/subtract) şekiller `shape.type: "compound"` olarak geliyor ve
-  ölçülmeden **sessizce düşüyordu**. İkinci bir gerçek tasarımda yakalandı:
-  291 düğümün **10'u** compound, bilinmeyen tip oranı %3,44. `shape.path` boolean
-  işlemin sonucunu taşıyor (doğrulandı: bbox'ı çocuklarının birleşimiyle birebir),
-  yani normal bir yol gibi ölçülüyor. Oran **%0,00**'a, eleman sayısı 172 → **182**'ye çıktı.
-  SVG export'unda `fill-rule="evenodd"` veriliyor — yoksa `exclude` ile açılan delik dolardı.
+- ~~**Boolean shapes (`compound`).**~~ **✅ ÇÖZÜLDÜ (1.12.1)** — shapes combined in XD
+  (union/exclude/subtract) arrive as `shape.type: "compound"` and were **dropped
+  silently** without being measured. Caught on a second real design: **10** of 291 nodes
+  were compound, an unknown-type rate of 3.44%. `shape.path` carries the result of the
+  boolean operation (verified: its bbox matches the union of its children exactly), so it
+  is measured like a normal path. The rate went to **0.00%** and the element count from
+  172 to **182**. The SVG export emits `fill-rule="evenodd"` — without it the hole opened
+  by `exclude` would be filled in.
 
+- ~~**Vector icons.**~~ **✅ ÇÖZÜLDÜ (1.10.0)** — `d2c xd assets` produces real SVG. The
+  AGC scenegraph carries the path data verbatim; the path is no longer *approximate*.
+  Verified: `user-icon` was exported as **18×19** and matched the source data exactly.
+  Identical icons are deduplicated by content (73 → 43 files on one screen).
+  **Reference correction:** `limitations.md` used to record the target as **19×19**, and
+  the tool reached 18×19 across two visual diff rounds and reported *"1px residual"*.
+  The source data says **18×19** — that "1px residual" never existed, **the hand-written
+  reference was wrong.**
+  *Previously:* the XD viewer did not provide SVG; an icon's box and colour were measured
+  but its path was approximate. On the first attempt the ink box came out 15×17 (20% too
+  narrow); the visual diff caught it and it reached 18×19 in two rounds. For an exact
+  result, ask the designer for the SVG.
+- ~~**Images.**~~ **✅ ÇÖZÜLDÜ (1.10.0)** — `d2c xd assets` downloads the images.
+  Verified: **15 WebP** files (8–247 KB) downloaded from one screen. The same image is
+  downloaded once. `pattern.meta.ux.scaleBehavior` gives the CSS `object-fit` equivalent.
+  *Previously:* product photos, logos and illustrations could not be downloaded; a
+  correctly sized placeholder plus a `TODO` was left instead.
 
-- ~~**Vektör ikonlar.**~~ **✅ ÇÖZÜLDÜ (1.10.0)** — `d2c xd assets` gerçek SVG
-  üretiyor. AGC scenegraph yol verisini birebir taşıyor; yol artık *yaklaşık* değil.
-  Doğrulandı: `user-icon` **18×19** olarak export edildi ve kaynak veriyle birebir
-  tuttu. Özdeş ikonlar içerik bazlı tekilleştiriliyor (bir ekranda 73 → 43 dosya).
-  **Referans düzeltmesi:** `limitations.md` eskiden hedefi **19×19** yazıyordu ve araç
-  iki görsel diff turunda 18×19'a ulaşıp *"1px artık kaldı"* diye raporlamıştı.
-  Kaynak veri **18×19** diyor — o "1px artık" yoktu, **elle yazılan referans yanlıştı.**
-  *Eski durum:* XD viewer SVG vermiyor; ikonların kutusu ve rengi ölçülü, yolu
-  yaklaşıktı. İlk çizimde mürekkep kutusu 15×17 kalmıştı (%20 dar). Üretilen ikonların **kutusu ve rengi
-  ölçülmüştür, yolu yaklaşıktır.** Gerçek örnek: kullanıcı ikonu ilk çizimde mürekkep
-  kutusu 15×17 kaldı (hedef 19×19, %20 dar); görsel diff yakaladı, iki turda 18×19'a
-  çıktı, 1px artık kaldı. Birebir sonuç için tasarımcıdan SVG isteyin.
-- ~~**Görseller.**~~ **✅ ÇÖZÜLDÜ (1.10.0)** — `d2c xd assets` görselleri indiriyor.
-  Doğrulandı: bir ekranda **15 WebP** (8–247 KB) indi. Aynı görsel bir kez iner.
-  `pattern.meta.ux.scaleBehavior` CSS `object-fit` karşılığını veriyor.
-  *Eski durum:* ürün fotoğrafı, logo, illüstrasyon indirilemiyordu; doğru boyutta
-  placeholder + `TODO` bırakılıyordu.
+## What it does not read
 
-## Okumadıkları
+- **Interaction and state.** **⏳ Solvable in M4** — `interactions.json` is reachable from
+  the CDN (trigger, action, duration, easing). Right now it is **not read at all.** Hover
+  states, drawer opening animations, the open state of a toggle, and form submission are
+  not generated. The components are the purely visual equivalent of the Default State.
+- **Breakpoints.** XD does not provide breakpoint information. *(unchanged)* When the
+  artboards are 375 and 1440, `lg: = 1024px` is **assumed**. Confirm with the designer.
+- **Horizontal segmentation.** Screen segmentation works vertically; columns inside a
+  section are not separated. The section is measured as one piece.
+- **Freely laid out artboards.** Segmentation is for vertically flowing pages. On
+  dashboards, maps and canvas-style screens it does not produce a meaningful section map.
 
-- **Etkileşim ve state.** **⏳ M4'te çözülebilir** — `interactions.json` CDN'den
-  erişilebilir durumda (trigger, action, duration, easing). Şu an **hiç okunmuyor.**
-  Hover state'leri, drawer açılma animasyonu, toggle'ın açık hali, form gönderimi
-  üretilmiyor. Bileşenler Default State'in salt görsel karşılığıdır.
-- **Kırılma noktası.** XD breakpoint bilgisi vermiyor. *(değişmedi)* Artboard'lar 375 ve 1440 ise
-  `lg: = 1024px` **varsayılıyor**. Tasarımcıdan teyit alın.
-- **Yatay ayrıştırma.** Ekran ayrıştırma dikey çalışır; bir bölümün içindeki kolonlar
-  ayrılmaz. Bölüm tek parça olarak ölçülür.
-- **Serbest yerleşimli artboard'lar.** Ayrıştırma dikey akan sayfalar içindir.
-  Dashboard, harita, kanvas tipi ekranlarda anlamlı bölüm haritası çıkarmaz.
+## What it does not produce
 
-## Üretmedikleri
+- **No tests.** Nothing tells you if the component breaks later. `/d2c-verify` is run by
+  hand; it is not wired into CI.
+- **Theme tokens are not added automatically.** The `@theme` block is a shared surface;
+  the tool only writes a **suggestion** (surfacing hex values that repeat across 3+
+  components). You add them yourself.
+- **No data layer.** The generated components are presentational; they take props and do
+  not fetch data.
 
-- **Test yok.** Bileşen sonradan bozulursa haber veren bir şey yok. `/d2c-verify`
-  elle çalıştırılır; CI'a bağlı değildir.
-- **Tema token'ları otomatik eklenmiyor.** `@theme` bloğu paylaşılan bir yüzey;
-  araç yalnız **öneri** yazar (3+ bileşende tekrar eden hex'leri öne çıkarır).
-  Eklemeyi siz yaparsınız.
-- **Veri katmanı yok.** Üretilen bileşenler sunum bileşenidir; props alır, veri çekmez.
+## What cannot be closed, by the nature of the measurement
 
-## Ölçümün doğası gereği kapanmayanlar
+- **`border-box` and *Center Stroke* are not the same thing.** In XD a 1px stroke sits on
+  the geometry line and padding is measured from the geometry edge; in CSS the border is
+  drawn inside the box. 316 outer width + 24 padding + 268 content **cannot all hold at
+  once** in CSS — one of them will be off by 2px.
+- **XD text frame ≠ CSS line box.** The height of text elements is systematically measured
+  differently (see troubleshooting). Half-line compensation fixes the position, but the
+  element's *own* height will not be the number XD reports.
+- **The visual diff percentage is not a pass mark.** XD draws text to a canvas, the browser
+  draws the DOM. Even with the same font and the same size, the floor in a text-heavy
+  section is **5-10%**. The number is used relatively; the decision rests on visually
+  inspecting the deviating regions.
 
-- **`border-box` ile *Center Stroke* aynı şey değil.** XD'de 1px stroke geometri
-  çizgisinin üzerinde durur ve padding geometri kenarından ölçülür; CSS'te border
-  kutunun içine çizilir. 316 dış genişlik + 24 padding + 268 içerik CSS'te **aynı anda
-  sağlanamaz** — biri 2px verir.
-- **XD metin çerçevesi ≠ CSS satır kutusu.** Metin elemanlarının yüksekliği
-  sistematik olarak farklı ölçülür (bkz. sorun-giderme). Yarı-satır telafisi konumu
-  düzeltir, ama elemanın *kendi* yüksekliği XD'nin verdiği sayı olmaz.
-- **Görsel diff yüzdesi bir geçme notu değil.** XD metni canvas'a, tarayıcı DOM'a
-  çiziyor. Aynı font ve aynı ölçüyle bile metin ağırlıklı bir bölümde taban fark
-  **%5-10**. Sayı göreli kullanılır; karar sapan bölgelerin görsel incelemesine dayanır.
+- **The structural percentage is AREA WEIGHTED — it under-scores a small but important
+  difference.** Measured in 1.12.0 with a synthetic pair:
 
-- **Yapısal yüzde ALAN AĞIRLIKLI — küçük ama önemli farkı düşük puanlar.**
-  1.12.0'da sentetik bir çiftle ölçüldü:
-
-  | bozulma | ham | yapısal | sapan bölge |
+  | corruption | raw | structural | deviating regions |
   |---|---:|---:|---:|
-  | 1px kayma (gürültü) | %15,44 | **%0,83** | **36** — sayfaya yayılmış |
-  | ikon değişimi (gerçek hata) | %0,36 | **%0,79** | **6** — hepsi ikonun sütununda |
+  | 1px shift (noise) | 15.44% | **0.83%** | **36** — spread across the page |
+  | icon change (a real error) | 0.36% | **0.79%** | **6** — all in the icon's column |
 
-  Yani **yüzde ikisini sıralamıyor**: 24×24'lük bir ikon 240×160'lık sayfanın
-  %1,5'i. Ayrım *bölge sayısı ve konumunda*: gürültü yayılır, gerçek hata kümelenir.
-  Bu, "karar bölge incelemesine dayanır" kuralının somut kanıtı — kural bir üslup
-  tercihi değil, ölçümün doğasından geliyor. (`cli/test/detection.test.mjs`)
+  So **the percentage does not rank them**: a 24×24 icon is 1.5% of a 240×160 page. The
+  discriminator is *the number and position of the regions*: noise spreads, a real error
+  clusters. This is concrete evidence for the "the decision rests on region inspection"
+  rule — the rule is not a stylistic preference, it follows from the nature of the
+  measurement. (`cli/test/detection.test.mjs`)
 
-## Çalışma biçiminden gelenler
+## Consequences of how it works
 
-- ~~**Aynı repoda paralel `/d2c` çalıştırılamaz.**~~ **✅ ÇÖZÜLDÜ (1.8.0)** — ağ
-  yolunda paylaşımlı tarayıcı yok; doğrulama kendi Playwright oturumunu açıp kapatıyor.
-  **Legacy modda hâlâ geçerli:** MCP tarayıcısı paylaşımlı ve tek.
-- **Farklı oturumlar `--isolated` olmadan birbirini kilitler.** *(yalnız legacy mod)* chrome-devtools MCP
-  argümansız kurulduğunda tüm sunucular aynı Chrome profilini kullanır ve profili ilk
-  kapan kazanır; diğerleri `The browser is already running for .../chrome-profile`
-  hatası alır. **Bu bir sınır değil, kurulum eksiğidir** — `--isolated` ile her oturum
-  kendi geçici profilini alır ve paralel çalışabilirler (bkz. `installation.md`).
-  Bu gerçekten yaşandı: paralel açılmış başka bir oturum profili tuttuğu için ölçüm
-  hiç başlayamadı.
-- ~~**Yavaş.**~~ **✅ ÇÖZÜLDÜ (1.6.0–1.8.0).** Ölçüm ~229 araç çağrısından **1**'e,
-  render doğrulama 11 çağrı/184 sn'den **1 çağrı/1,3 sn**'ye, görsel karşılaştırma
-  56 çağrı/960 sn'den **1 çağrı/2,7 sn**'ye indi. Kalan süre kod üretimi ve review —
-  doğru yer. Ölçümler: `docs/benchmark.md`.
-  *Eski durum:* bölüm başına 10-20 dakika beklemek normaldi.
-- ~~**Görsel karşılaştırma Python + Pillow istiyor.**~~ **✅ ÇÖZÜLDÜ (1.11.0)** —
-  piksel karşılaştırma TypeScript'e taşındı ve `cli/dist/d2c.mjs` içine gömüldü.
-  Eşdeğerlik kanıtlandı: 8 durumda ham/yapısal fark **tam 0**, ısı haritası ve hazır
-  kırpmalar **bayt bayt** aynı (2,7 MP'lik gerçek boyutta da 0).
-  **Hâlâ Python isteyenler:** `extractorStrategy: "legacy"` (`section-map.py`, PIL) ·
-  `visual diff --kalibre` çapa yolu (`visual-diff.py`, PIL) · `component-inventory.py`
-  (PIL değil, yalnız stdlib — Faz 8'de ts-morph'a taşınacak).
+- ~~**Parallel `/d2c` runs in the same repo are impossible.**~~ **✅ ÇÖZÜLDÜ (1.8.0)** —
+  there is no shared browser on the network path; verification opens and closes its own
+  Playwright session. **Still applies in legacy mode:** the MCP browser is shared and
+  single.
+- **Different sessions lock each other out without `--isolated`.** *(legacy mode only)*
+  When chrome-devtools MCP is installed without arguments, every server uses the same
+  Chrome profile and whoever grabs it first wins; the others get
+  `The browser is already running for .../chrome-profile`. **This is not a limit, it is a
+  setup gap** — with `--isolated` each session gets its own temporary profile and they can
+  run in parallel (see `installation.md`).
+  This actually happened: another session opened in parallel held the profile, so the
+  measurement could never start.
+- ~~**Slow.**~~ **✅ ÇÖZÜLDÜ (1.6.0–1.8.0).** Measurement went from ~229 tool calls to
+  **1**, render verification from 11 calls/184 s to **1 call/1.3 s**, and visual
+  comparison from 56 calls/960 s to **1 call/2.7 s**. The remaining time is code
+  generation and review — the right place for it. Measurements: `docs/benchmark.md`.
+  *Previously:* waiting 10-20 minutes per section was normal.
+- ~~**The visual comparison needs Python + Pillow.**~~ **✅ ÇÖZÜLDÜ (1.11.0)** — the pixel
+  comparison moved to TypeScript and is bundled inside `cli/dist/d2c.mjs`. Equivalence was
+  proven: across 8 cases the raw/structural difference is **exactly 0**, and the heat map
+  and ready-made crops are **byte for byte** identical (also 0 at a real 2.7 MP size).
+  **What still needs Python:** `extractorStrategy: "legacy"` (`section-map.py`, PIL) ·
+  the `visual diff --kalibre` anchor path (`visual-diff.py`, PIL). `component-inventory.py`
+  is no longer called (1.12.0 replaced it with `d2c inventory`) and never needed PIL.
 
-- **`--kalibre` çapa mantığı TS'e taşınmadı.** Bilerek: thumbnail referansında ölçek
-  tam biliniyor, çapa türetmeye gerek yok. Çapa gerektiren bir durumda motor
-  **otomatik olarak Python'a düşüyor** ve bunu `visual.json`'daki `motor` alanına
-  yazıyor — sessizce yaklaşık sonuç üretmiyor.
+- **The `--kalibre` anchor logic was not ported to TS.** Deliberately: with a thumbnail
+  reference the scale is known exactly, so there is no need to derive an anchor. In a
+  situation that does require an anchor, the engine **falls back to Python automatically**
+  and records that in the `motor` field of `visual.json` — it does not silently produce an
+  approximate result.
 
-- **Tasarım hatalarını taklit etmez.** Elle yerleştirme sapmaları (ör. bir duyuru
-  şeridi metninin merkezden 10px kayık olması) kodda düzeltilir ve **raporlanır** —
-  gizlenmez, ama kopyalanmaz da. Kararı tasarımcı verir.
-- **Referans değerler yanlış olabilir.** Elle yazılmış beklenen değerlerle ölçüm
-  çelişirse **ölçüme uyulur** ve referans hatası raporlanır. Benchmark'ta iki referans
-  değeri bu şekilde düzeltildi (bkz. `fixtures/benchmark.json` → `referans_duzeltmeleri`).
+- **It does not reproduce design mistakes.** Manual placement deviations (e.g. an
+  announcement strip's text sitting 10px off centre) are corrected in the code and
+  **reported** — not hidden, but not copied either. The designer makes the call.
+- **Reference values can be wrong.** When a hand-written expected value contradicts the
+  measurement, **the measurement wins** and the reference error is reported. Two reference
+  values in the benchmark were corrected this way (see `fixtures/benchmark.json` →
+  `referans_duzeltmeleri`).

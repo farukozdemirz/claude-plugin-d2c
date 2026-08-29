@@ -1,33 +1,34 @@
 ---
 name: d2c-code
-description: "XD ölçümünü Tailwind + React bileşenine çevirir; üretilen kodu tarayıcıda render edip design-diff ile ölçerek tasarımla karşılaştırır ve sapmaları kapatır."
-argument-hint: <xd-link|rapor-yolu> [hedef bölüm]
+description: "Turns an XD measurement into a Tailwind + React component; renders the generated code in a browser, measures it with design-diff against the design, and closes the deviations."
+argument-hint: <xd-link|report-path> [target section]
 ---
 
 # d2c-code
 
-**Argüman:** ilk kelime XD linki **veya** mevcut bir rapor dosyasının yolu, kalanı hedef
-bölüm tarifi. Örnek: `/d2c-code <reportDir>/<bolum>/spec.md "kart"`
+**Argument:** the first word is an XD link **or** the path to an existing report file, the
+rest describes the target section. Example:
+`/d2c-code <reportDir>/<section>/spec.md "card"`
 
-## İlk iş
+## First thing
 
-`references/tailwind.md` ve `references/quality.md`'yi oku. Oradaki kurallar tahminle yazılan Tailwind'in tasarımı
-neden tutturmadığını ve nasıl önleneceğini anlatıyor.
+Read `references/tailwind.md` and `references/quality.md`. The rules there explain why
+Tailwind written from guesswork misses the design, and how to avoid it.
 
 
-## Script yolları
+## Script paths
 
-Script çağırmadan önce plugin kökünü çöz. `CLAUDE_PLUGIN_ROOT` plugin bağlamında
-ortam değişkeni olarak gelir; gelmezse (repo içi geliştirme kurulumu) yedek zincir
-devreye girer:
+Resolve the plugin root before calling any script. `CLAUDE_PLUGIN_ROOT` is provided as an
+environment variable in plugin context; when it is missing (in-repo development install)
+the fallback chain kicks in:
 
 ```bash
 D2C_ROOT="${CLAUDE_PLUGIN_ROOT:-}"
 if [ -z "$D2C_ROOT" ]; then
-  # Kurulu plugin: ~/.claude/plugins/cache/<marketplace>/<plugin>/<sürüm>/
-  # (sürüm alt dizini VAR — doğrulandı, ilk yazımda atlanmıştı)
-  # Birden çok sürüm kurulu kalabilir; sürüm sırasına göre EN YENİSİ seçilmeli
-  # (düz glob alfabetik sıralar ve 1.0.10'u 1.0.9'dan önce verir).
+  # Installed plugin: ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/
+  # (the version subdirectory EXISTS — verified, it was missed in the first draft)
+  # Several versions may stay installed; the NEWEST must win by version order
+  # (a plain glob sorts alphabetically and puts 1.0.10 before 1.0.9).
   for c in $(ls -d "$HOME"/.claude/plugins/cache/*/d2c/*/ 2>/dev/null | sort -Vr) \
            "$HOME"/.claude/plugins/*/d2c \
            "$HOME"/.claude/skills/d2c \
@@ -35,171 +36,181 @@ if [ -z "$D2C_ROOT" ]; then
     [ -f "$c/cli/dist/d2c.mjs" ] && D2C_ROOT="${c%/}" && break
   done
 fi
-[ -z "$D2C_ROOT" ] && echo "HATA: plugin kökü bulunamadı" && exit 1
+[ -z "$D2C_ROOT" ] && echo "ERROR: plugin root not found" && exit 1
 echo "D2C_ROOT=$D2C_ROOT"
 ```
 
-Bundan sonra tüm script çağrıları `"$D2C_ROOT/skills/.../scripts/..."` biçiminde.
-**Repo-göreli yol yazma** — plugin başka bir projede çalışacak.
+From here on every script call is written as `"$D2C_ROOT/skills/.../scripts/..."`.
+**Never write repo-relative paths** — the plugin runs inside someone else's project.
 
-## Akış
+## Flow
 
-### 1. Girdi
+### 1. Input
 
-**Tek girdin `olcum.json`.** Bölüm kapsamlı ve kendi içinde yeterli: kutu · spacing ·
-radius · renk · kontur · tipografi · metin · eleman ilişkileri (`ebeveyn`/`sira`) ·
-`tekrar` (sıkıştırılmış diziler) · `hesaplanan` boşluklar.
+**Your only input is `olcum.json`.** It is section-scoped and self-contained: box ·
+spacing · radius · colour · stroke · typography · text · element relationships
+(`ebeveyn`/`sira`) · `tekrar` (compressed series) · `hesaplanan` gaps.
 
-> **`design.json`'ı AÇMA.** Tam scenegraph, yüzlerce KB; bağlama sokmak ölçüm
-> maliyetini token'a taşır. İhtiyacın olan her değer `olcum.json`'da.
+> **Do NOT open `design.json`.** It is the full scenegraph, hundreds of KB; pulling it
+> into context moves the cost of measurement into tokens. Every value you need is in
+> `olcum.json`.
 
-- Argüman **XD linkiyse**: `d2c-spec` skill'ini çağır; o `olcum.json` + `spec.md` üretir.
-- Argüman **`olcum.json` / rapor yoluysa**: doğrudan oku.
-- `olcum.json` yoksa (eski rapor): `d2c-spec` legacy yolunu uygula.
+- If the argument is an **XD link**: call the `d2c-spec` skill; it produces
+  `olcum.json` + `spec.md`.
+- If the argument is an **`olcum.json` / report path**: read it directly.
+- If there is no `olcum.json` (an old report): follow the `d2c-spec` legacy path.
 
-`tekrar` alanını doğru oku: `adet: 8, eksen: "x", adim: 332` demek **8 özdeş eleman,
-332 px arayla** demek — `hesaplanan`'daki gap (332 − 316 = 16) aradaki boşluktur.
-`duzenli: false` ise `konumlar` listesindeki her konum gerçektir.
+Read the `tekrar` field correctly: `adet: 8, eksen: "x", adim: 332` means **8 identical
+elements, 332 px apart** — the gap in `hesaplanan` (332 − 316 = 16) is the space between
+them. When `duzenli: false`, every position in the `konumlar` list is real.
 
-### 2. Mobil + desktop
+### 2. Mobile + desktop
 
-Aynı sayfanın iki artboard'ı olabilir (ör. "Desktop - Ekran A" ve "Mobil - Ekran A").
-Ekran listesini gez (`xd-viewer-notlari.md` §12) ve **ikisini de ölç**:
+The same page may have two artboards (e.g. "Desktop - Screen A" and "Mobile - Screen A").
+Walk the screen list (`xd-viewer-notes.md` §12) and **measure both**:
 
-- **Mobil değerler base**, **desktop `lg:` prefix'i**.
-- Tek artboard varsa bunu raporda ve kodda açıkça belirt — responsive davranış
-  uydurma, TODO bırak.
-- İki artboard arasında eleman **sırası** değişiyorsa DOM'u kopyalama, `order-*` kullan.
+- **Mobile values are the base**, **desktop gets the `lg:` prefix**.
+- If there is only one artboard, say so explicitly in the report and in the code — do not
+  invent responsive behaviour, leave a TODO.
+- If element **order** changes between the two artboards, do not duplicate the DOM; use
+  `order-*`.
 
-### 3a. Bu bileşen zaten var mı?
+### 3a. Does this component already exist?
 
-**Kod üretmeden önce** mevcut envanteri çıkar:
+**Before generating code**, produce the current inventory:
 
 ```bash
 node "$D2C_ROOT/cli/dist/d2c.mjs" inventory components
 ```
 
-Çıktı her bileşenin export'larını, ölçülerini, `data-testid`'lerini ve 3+ bileşende
-tekrar eden gömülü hex'leri (token adayları) verir. Eşleştirmeyi **`data-testid` ve
-ölçülerden** yap: kod yorumsuz üretildiği için JSDoc'ta XD kaynağı yazmıyor
-(bkz. `references/quality.md` §1). Bölümün XD kaynağı `code.md` raporunda duruyor.
+The output lists each component's exports, sizes, `data-testid`s, and the embedded hex
+values that repeat across 3+ components (token candidates). Match on **`data-testid` and
+sizes**: since code is generated without comments there is no XD source recorded in JSDoc
+(see `references/quality.md` §1). The section's XD source lives in the `code.md` report.
 
-> **1.12.0: envanter AST tabanlı.** Eski regex script yalnız `export function` ve
-> `export const` görüyordu; sentetik bir dosyada **5 export biçiminden 1'ini**
-> buluyordu. `export default function Kart`, `export { Kart as UrunKart }`,
-> `export * from` ve sınıf bileşenleri **görünmüyordu** — yani "bu bileşen yok"
-> deyip var olanı yeniden yazma riski vardı.
+> **1.12.0: the inventory is AST based.** The old regex script only saw `export function`
+> and `export const`; on a synthetic file it found **1 of 5 export forms**.
+> `export default function Card`, `export { Card as ProductCard }`, `export * from` and
+> class components were **invisible** — which risked concluding "this component does not
+> exist" and rewriting one that did.
 >
-> Parse edilemeyen dosya **sessizce atlanmaz**, `⚠ PARSE EDİLEMEDİ` olarak
-> raporlanır ve çıkış kodu 1 olur; envanterin eksik olduğunu bilerek karar ver.
+> A file that cannot be parsed is **not skipped silently**; it is reported as
+> `⚠ PARSE EDİLEMEDİ` and the exit code becomes 1, so you decide knowing the inventory is
+> incomplete.
 >
-> Regex script `skills/d2c-code/scripts/component-inventory.py`'de **duruyor**
-> (geri dönüş). Ölçtüğün spec ile karşılaştır:
+> The regex script is **still there** at
+> `skills/d2c-code/scripts/component-inventory.py` (fallback).
 
-- **Aynı XD elemanı** (aynı ekran + aynı `Rectangle`/`Path` adı) → yeni yazma, mevcut
-  bileşeni kullan.
-- **Aynı işi gören farklı varyant** (ör. iki ayrı yorum kartı) → yeni bileşen yazmadan
-  önce mevcut olanı prop ile genişletmeyi değerlendir; genişletmiyorsan **neden
-  ayrı olduğunu** raporda yaz.
-- **Yeni** → devam et.
+Compare against the spec you measured:
 
-Token adayı çıktıysa raporun "önerilen token" bölümünde öne çıkar.
+- **The same XD element** (same screen + same `Rectangle`/`Path` name) → do not write a new
+  one, use the existing component.
+- **A different variant doing the same job** (e.g. two different review cards) → before
+  writing a new component, consider extending the existing one with a prop; if you do not
+  extend it, write **why they are separate** in the report.
+- **New** → carry on.
 
-### 3a2. Varlıkları çıkar (ikon + görsel)
+If a token candidate came up, surface it in the report's "suggested tokens" section.
 
-Bölümde vektör ikon veya görsel varsa (`olcum.json`'da `tip: "gorsel"` ya da
-`gorselUid` dolu elemanlar), kod yazmadan önce tek komutla çıkar:
+### 3a2. Export the assets (icons + images)
+
+If the section has vector icons or images (elements with `tip: "gorsel"` or a populated
+`gorselUid` in `olcum.json`), export them with one command before writing code:
 
 ```bash
-node "$D2C_ROOT/cli/dist/d2c.mjs" xd assets "<xd link>" --screen "<ekran>" \
+node "$D2C_ROOT/cli/dist/d2c.mjs" xd assets "<xd link>" --screen "<screen>" \
   --out-dir public/d2c
 ```
 
-Gerçek SVG ve gerçek görsel dosyası gelir — placeholder ve yaklaşık ikon çizme
-gereği kalkar. `atlananlar` listesindeki her kalem için `{/* TODO */}` bırak.
+You get real SVG and real image files — no need for placeholders or approximate icons.
+Leave a `{/* TODO */}` for every item in the `atlananlar` list.
 
-### 3. Kod üret
+### 3. Generate the code
 
-**Önce font kutularını ÖLÇ.** `references/tailwind.md` → "fontKutusu'nu VARSAYMA".
-Tek `evaluate_script` ile kullanacağın her aile/punto için `fontBoundingBox` topla ve
-yarı-satırı gerçek sayıdan hesapla. `1.25 × punto` varsayımı Bw Modelica'da doğru,
-**Tobias'ta 1.375** — varsaymak iki ayrı ekranda başlığı 4px kaydırdı ve her defasında
-bir görsel diff turu harcattı. Bu tek çağrı o turu geri kazandırır.
+**Measure the font boxes FIRST.** `references/tailwind.md` → "do NOT ASSUME fontKutusu".
+With a single `evaluate_script`, collect `fontBoundingBox` for every family/size pair you
+will use and compute the half-line from the real number. The `1.25 × size` assumption
+holds for one family but is **1.375 for another** — assuming it shifted the heading by 4px
+on two separate screens and cost a visual diff round each time. This one call buys that
+round back.
 
-Sonra `references/tailwind.md` kurallarına göre yaz. Bileşeni projenin mevcut yapısına
-yerleştir (App Router; `componentsDir` yoksa oluştur). Doğrulanabilmesi için bileşeni
-render eden bir sayfa rotası da lazım — yoksa `<previewDir>/<ad>-preview/page.tsx` aç.
+Then write the code following the rules in `references/tailwind.md`. Place the component
+into the project's existing structure (App Router; create `componentsDir` if it does not
+exist). To make it verifiable you also need a page route that renders the component — if
+there is none, create `<previewDir>/<name>-preview/page.tsx`.
 
-Ölçülecek elemanlara **stabil `data-testid`** ver — İngilizce, kebab-case:
-`data-testid="review-card"`. (Tasarım Türkçe olsa da tanımlayıcılar İngilizce;
-bkz. `references/quality.md` §6.)
-`design-diff` bunları seçici olarak kullanacak; sınıf adlarına dayanmak kırılgan.
+Give the elements to be measured a **stable `data-testid`** — English, kebab-case:
+`data-testid="review-card"`. (Even when the design is in another language, identifiers are
+English; see `references/quality.md` §6.)
+`design-diff` will use these as selectors; relying on class names is fragile.
 
-**`testid`'leri `olcum.json`'a geri yaz.** Ölçüm fazı elemanları XD adıyla biliyor
-(`Rectangle 7931`), sen onlara `testid` verdin. İkisini eşleştirip `elemanlar[]`
-dizisindeki ilgili kayda `"testid"` alanını ekle. `design-diff` hedef tablosunu bu
-dosyadan okuyacak — eşleme olmazsa okuyamaz (§4).
+**Write the `testid`s back into `olcum.json`.** The measurement phase knows the elements by
+their XD names (`Rectangle 7931`); you gave them `testid`s. Match the two and add the
+`"testid"` field to the matching record in the `elemanlar[]` array. `design-diff` reads its
+target table from this file — without the mapping it cannot (§4).
 
-### 4. Doğrula
+### 4. Verify
 
-**Önce ölçümü kendin çalıştır — tek komut:**
+**Run the measurement yourself first — one command:**
 
 ```bash
 node "$D2C_ROOT/cli/dist/d2c.mjs" render verify \
-  --olcum "<reportDir>/<bolum-slug>/olcum.json" --url "<render url>" \
-  --json -o "<reportDir>/<bolum-slug>/verification.json"
+  --olcum "<reportDir>/<section-slug>/olcum.json" --url "<render url>" \
+  --json -o "<reportDir>/<section-slug>/verification.json"
 ```
 
-Viewport + scrollbar telafisi, doğru-uygulama teyidi, font kontrolü, rect +
-computedStyle, tolerans — hepsi içinde. **~1,3 sn.** Çıktı makine okunur.
+Viewport + scrollbar compensation, right-app confirmation, font check, rect +
+computedStyle, tolerance — all inside. **~1.3 s.** The output is machine readable.
 
-`sapan` yoksa ajanı hiç çağırma. Sapan varsa `design-diff` ajanına
-`verification.json` yolunu ver — o **sebebi** yorumlar.
+If there is no `sapan`, do not call the agent at all. If there is, give the `design-diff`
+agent the path to `verification.json` — it interprets **why**.
 
-> `testid`'ler `olcum.json`'da `null` ise komut **ölçmez** ve söyler. §3'te
-> doldurulmuş olmalı.
+> If the `testid`s in `olcum.json` are `null`, the command **does not measure** and says
+> so. They should have been filled in during §3.
 
-`playwright-core` yoksa (`d2c doctor` söyler) legacy yola düş: `design-diff` ajanını
-MCP'li haliyle çağır — o yol **korunuyor**.
+If `playwright-core` is unavailable (`d2c doctor` will say so), fall back to the legacy
+path: call the `design-diff` agent in its MCP form — that path is **preserved**.
 
-#### Legacy: ajanla elle ölçüm
+#### Legacy: measuring by hand with the agent
 
-`design-diff` subagent'ını çağır. **Hedef tablosunu prompt'a ELLE YAZMA** —
-`olcum.json`'un yolunu ver, ajan `Read` ile kendisi okusun. Elle transkripsiyon hem
-prompt'u şişiriyor (ekran başına 30+ satır) hem de sessiz hata kaynağı: yanlış
-yazarsan ajan yanlış şeyi doğrular ve kimse fark etmez.
+Call the `design-diff` subagent. **Do NOT hand-write the target table into the prompt** —
+give it the path to `olcum.json` and let the agent `Read` it. Manual transcription both
+bloats the prompt (30+ lines per screen) and is a source of silent errors: if you get it
+wrong, the agent verifies the wrong thing and nobody notices.
 
-Prompt'una şunları ver:
-- **`<reportDir>/<bolum-slug>/olcum.json` yolu** — hedefler, `testid` eşlemesi,
-  artboard genişlikleri hepsi orada
-- sayfa URL'i (dev server çalışıyorsa "zaten çalışıyor" de, yeniden başlatmasın)
-- ölçülecek viewport'lar
-- **kabul edilen sapmalar** (border-box, metin çerçevesi, yaklaşık ikonlar, eksik
-  fontlar) — bunlar `olcum.json`'da yok, prompt'ta olmalı
+Give the prompt:
+- **the path to `<reportDir>/<section-slug>/olcum.json`** — targets, `testid` mapping and
+  artboard widths are all in there
+- the page URL (if the dev server is running, say "already running" so it is not restarted)
+- the viewports to measure
+- the **accepted deviations** (border-box, text frame, approximate icons, missing fonts) —
+  these are not in `olcum.json`, they have to be in the prompt
 
-Font ailesi hedefleri `elemanlar[].font.aile` alanından gelir; **"bu tasarımın fontu X"
-gibi genel bir cümle yazma.** Ajan bunu "her eleman X olmalı" diye okuyup, tasarımın
-bilerek başka aile kullandığı elemanlar için **yanlış ✗** üretiyor. Projede yüklü
-olmayan aileler için (`Helvetica Neue` gibi) prompt'ta "⚠ say, ✗ sayma" de.
+Font family targets come from the `elemanlar[].font.aile` field; **do not write a blanket
+sentence like "this design's font is X".** The agent reads that as "every element must be
+X" and produces **false ✗** for elements where the design deliberately uses another family.
+For families not installed in the project (such as `Helvetica Neue`), say in the prompt:
+"count as ⚠, not ✗".
 
-**Tarayıcı çakışması:** `design-diff` ile aynı chrome-devtools MCP tarayıcısını
-paylaşıyorsun. Subagent'ı **arka planda başlatıp** sen de XD ölçmeye devam edersen
-sayfayı birbirinizin altından çekersiniz. Ya doğrulamayı `run_in_background: false` ile
-çalıştır, ya da subagent çalışırken tarayıcıya hiç dokunma (dosya/rapor işi yap).
+**Browser contention:** you share the same chrome-devtools MCP browser with `design-diff`.
+If you start the subagent **in the background** and keep measuring XD yourself, you will
+pull the page out from under each other. Either run the verification with
+`run_in_background: false`, or do not touch the browser at all while the subagent runs (do
+file/report work instead).
 
-Dönen tabloda sapan varsa **kodu düzelt ve subagent'ı tekrar çağır**.
+If the returned table has deviations, **fix the code and call the subagent again**.
 
-**Düzeltmeden sonra kendi ön kontrolünü TEK çağrıda yap.** Ayrı `navigate` + ayrı
-`emulate` + ayrı `evaluate_script` üç araç çağrısı ≈ 45 sn demek; hepsi tek
-`evaluate_script`'e sığar:
+**After a fix, do your own pre-check in ONE call.** A separate `navigate` + separate
+`emulate` + separate `evaluate_script` is three tool calls ≈ 45 s; all of it fits into a
+single `evaluate_script`:
 
 ```js
 async () => {
-  location.reload();                    // ya da zaten yüklüyse atla
+  location.reload();                    // or skip if it is already loaded
   await new Promise(r => setTimeout(r, 1200));
   await document.fonts.ready;
   await new Promise(r => setTimeout(r, 500));
-  const k = document.querySelector('[data-testid="bolum"]').getBoundingClientRect();
+  const k = document.querySelector('[data-testid="section"]').getBoundingClientRect();
   const g = (id) => { const e = document.querySelector(`[data-testid="${id}"]`);
     if (!e) return null; const r = e.getBoundingClientRect();
     return { x: +r.x.toFixed(2), y_rel: +(r.y - k.y).toFixed(2),
@@ -210,109 +221,117 @@ async () => {
 }
 ```
 
-Ön kontrol tuttuysa `design-diff`'i çağır; tutmadıysa **çağırma**, önce düzelt —
-her ajan turu ~2-4 dk.
+If the pre-check passes, call `design-diff`; if it does not, **do not call it** — fix first.
+Every agent round is ~2-4 min.
 
-- En fazla **4 tur**.
-- 4 turda kapanmayan sapmalar raporda **"çözülemedi"** olarak, sebebiyle birlikte
-  yazılır. **Gizleme, tolerans gevşetme, hedef değeri değiştirme yok.**
-- `⚠ font eksik` notu gelirse bu bir başarısızlık değil — raporda uyarı olarak geçir.
+- At most **4 rounds**.
+- Deviations that do not close in 4 rounds are written into the report as
+  **"çözülemedi"** (unresolved), with the reason.
+  **No hiding, no loosening tolerances, no changing target values.**
+- A `⚠ font eksik` note is not a failure — carry it into the report as a warning.
 
-### 4b. Görsel doğrula
+### 4b. Verify visually
 
-Sayısal tablo kutuları doğrular, **içlerini doğrulamaz.** Doğrulanmış: üç ekran da sayısal
-olarak temiz çıktı; ilk görsel karşılaştırma `line-clamp-3`'ün eklediği `…` karakterini
-hemen yakaladı.
+The numeric table verifies the boxes, **not what is inside them.** Verified: all three
+screens came out numerically clean; the first visual comparison immediately caught the `…`
+character that `line-clamp-3` had added.
 
-1. **Karşılaştırmayı kendin çalıştır — tek komut:**
+1. **Run the comparison yourself — one command:**
 
 ```bash
 node "$D2C_ROOT/cli/dist/d2c.mjs" visual diff \
-  --olcum "<reportDir>/<bolum-slug>/olcum.json" \
-  --xd-url "<xd link>" --screen "<ekran adı>" \
-  --url "<render url>" --testid "<bölüm testid>" \
-  --out-dir "<reportDir>/<bolum-slug>/gorsel"
+  --olcum "<reportDir>/<section-slug>/olcum.json" \
+  --xd-url "<xd link>" --screen "<screen name>" \
+  --url "<render url>" --testid "<section testid>" \
+  --out-dir "<reportDir>/<section-slug>/gorsel"
 ```
 
-Referans indirme (HTTP, XD viewer açılmaz), render yakalama, piksel karşılaştırma ve
-**hazır kırpmalar** — hepsi içinde, **~2,7 sn**. Çıktı `visual.json`.
+Reference download (over HTTP, the XD viewer is never opened), render capture, pixel
+comparison and **ready-made crops** — all inside, **~2.7 s**. The output is `visual.json`.
 
-Sapan bölge yoksa ajanı **hiç çağırma**. Varsa `visual-diff` ajanına `visual.json`
-yolunu ver — o kırpmalara **bakıp** ne gördüğünü söyler.
+If there is no deviating region, **do not call the agent at all**. If there is, give the
+`visual-diff` agent the path to `visual.json` — it **looks** at the crops and tells you
+what it sees.
 
-#### Legacy: ajanla elle yakalama
+#### Legacy: capturing by hand with the agent
 
-2. `visual-diff` subagent'ını çağır ve **hazır kırpma kutusunu ver**, çapayı
-   türettirme. Prompt'a: `olcum.json`'daki `referans.png` yolu + `referans.kirpma` +
-   `referans.esleme`, render URL'i + seçici + viewport, ve **bilinen/kabul edilen
-   farklar** (export edilemeyen görseller, yaklaşık ikonlar, eksik fontlar).
-   *Ölçülen fark:* çapayı ajana türettirmek görsel diff'i **19 dk**'ya çıkarıyor;
-   hazır kutu verildiğinde **10 dk**.
-3. Dönen tabloda "aksiyon gerektiren" varsa **düzelt**, sonra aşağıdaki kurala göre
-   ne çalıştıracağına karar ver.
+2. Call the `visual-diff` subagent and **give it the ready-made crop box**; do not make it
+   derive the anchor. In the prompt: the `referans.png` path from `olcum.json` plus
+   `referans.kirpma` and `referans.esleme`, the render URL + selector + viewport, and the
+   **known/accepted differences** (images that could not be exported, approximate icons,
+   missing fonts).
+   *Measured difference:* making the agent derive the anchor pushes the visual diff to
+   **19 min**; with a ready-made box it is **10 min**.
+3. If the returned table has anything "requiring action", **fix it**, then decide what to
+   run using the rule below.
 
-Yüzde bir geçme notu değil — ajanın "ne gördüm" satırlarına bak.
+The percentage is not a pass mark — read the agent's "what I saw" lines.
 
-#### Görsel tur bütçesi — EN FAZLA 2
+#### Visual round budget — AT MOST 2
 
-`design-diff`'in 4 turu var; **`visual-diff`'in 2 turu var.** Sebebi maliyet: bir görsel
-tur 8-17 dk, bir ölçüm turu 3 dk. Ölçülen gerçek koşu: 3 görsel tur **35 dakika**
-yedi ve toplam süreyi 106 dakikaya çıkardı.
+`design-diff` has 4 rounds; **`visual-diff` has 2.** The reason is cost: a visual round is
+8-17 min, a measurement round is 3 min. A measured real run: 3 visual rounds ate
+**35 minutes** and pushed the total to 106 minutes.
 
-**Düzeltmeden sonra tam bir görsel tur ÇALIŞTIRMA — önce hedefli doğrula.**
-Bulguların çoğu tek bir sayıyla doğrulanabilir (kutu 50 oldu mu, ürün adı x=160'a
-oturdu mu, `resize` kapandı mı). Bunu §4'teki tek çağrılık ön kontrolle yap.
+**Do NOT run a full visual round after a fix — verify in a targeted way first.**
+Most findings can be verified with a single number (did the box become 50, did the product
+name land on x=160, is `resize` off). Do that with the single-call pre-check from §4.
 
-İkinci görsel turu **yalnızca** şu ikisinden biri varsa çalıştır:
+Run a second visual round **only** if one of these holds:
 
-- Düzeltme **yeni piksel üretiyorsa** (eleman eklendi/çıkarıldı, ikon değişti, sarma
-  noktası kaydı) — hedefli ölçüm bunu göremez.
-- Ön kontrol bulgunun kapandığını **doğrulayamıyorsa**.
+- The fix **produces new pixels** (an element was added/removed, an icon changed, a wrap
+  point moved) — a targeted measurement cannot see that.
+- The pre-check **cannot confirm** that the finding closed.
 
-Salt konum/boyut düzeltmeleri için ikinci tur **gereksiz**: `design-diff` zaten ölçüyor.
+For pure position/size fixes a second round is **unnecessary**: `design-diff` already
+measures those.
 
-**2 turda kapanmayan görsel bulgular `code.md`'ye "çözülemedi" olarak yazılır** —
-sebebiyle birlikte. Gizleme yok, ama üçüncü tur da yok.
+**Visual findings that do not close in 2 rounds are written into `code.md` as
+"çözülemedi"** — with the reason. No hiding, but no third round either.
 
-#### Düzeltme sonrası hangi ajan?
+#### Which agent after a fix?
 
-| Ne düzelttin | Çalıştır |
+| What you fixed | Run |
 |---|---|
-| Konum / boyut / renk / font | `design-diff` (tek başına) |
-| Eleman eklendi-çıkarıldı, ikon, sarma noktası | `design-diff` **+** `visual-diff` |
-| Yalnız erişilebilirlik / semantik | hiçbiri — ön kontrol yeter |
+| Position / size / colour / font | `design-diff` (alone) |
+| Element added or removed, icon, wrap point | `design-diff` **+** `visual-diff` |
+| Accessibility / semantics only | neither — the pre-check is enough |
 
-Her ikisini birden çalıştırmak refleks olmasın: ölçülen koşuda 3 görsel tur otomatik
-olarak 3 ölçüm turu daha getirdi ve maliyet çarpımsal büyüdü.
+Do not reflexively run both: in the measured run, 3 visual rounds automatically brought 3
+more measurement rounds and the cost grew multiplicatively.
 
-### 4c. Kod incele
+### 4c. Review the code
 
-Ölçüm ve görsel kapandıktan sonra:
+Once the measurement and visual checks have closed:
 
-1. `references/quality.md`'deki listeyi kendi kodunda gözden geçir.
-2. `/code-review` çalıştır; bağlam olarak `quality.md` + o bölümün `code.md`'si ver.
-3. Bulguları uygula.
-4. **`design-diff`'i tekrar çalıştır** — refactor hizayı bozmuş olabilir.
+1. Go through the list in `references/quality.md` against your own code.
+2. Run `/code-review`; give `quality.md` + that section's `code.md` as context.
+3. Apply the findings.
+4. **Run `design-diff` again** — the refactor may have broken the alignment.
 
-Uygulanmayan bulgular raporda gerekçesiyle yazılır.
+Findings that were not applied are written into the report with a rationale.
 
-### 5. Çıktı
+### 5. Output
 
-`docs/d2c/<bolum-slug>/code.md` (repo köküne yazma):
-- Karşılaştırma tablosu (`design-diff`in son turu, viewport başına)
-- Kullanılan token'lar / arbitrary değerler
-- **Config'e eklenmesi önerilen token'lar** (Tailwind v4: `app/globals.css` içindeki
-  `@theme` bloğuna) — sen ekleme, öner
-- **Görsel diff sonucu** — aksiyon gerektiren farklar ve neden kapatılamadıysa sebebi
-- **Review sonucu** — uygulanan / uygulanmayan bulgular
-- TODO'lar (indirilemeyen görseller, eksik fontlar, tek artboard'dan dolayı bilinmeyen
-  responsive davranış, çözülemeyen sapmalar)
+`docs/d2c/<section-slug>/code.md` (do not write to the repo root):
+- Comparison table (the last `design-diff` round, per viewport)
+- Tokens used / arbitrary values
+- **Tokens suggested for the config** (Tailwind v4: the `@theme` block inside
+  `app/globals.css`) — suggest them, do not add them yourself
+- **Visual diff result** — differences requiring action, and why any could not be closed
+- **Review result** — findings applied / not applied
+- TODOs (images that could not be downloaded, missing fonts, responsive behaviour unknown
+  because there was only one artboard, unresolved deviations)
+- **Measurement provenance** (see `quality.md` §1): element → class → measurement table
+  with read vs. computed marked, every half-line compensation and where it came from, and
+  any assumptions. The code carries no comments, so this is where that information lives.
 
-Üretilen dosyaların yollarını terminalde özetle.
+Summarise the paths of the generated files in the terminal.
 
-### 6. Öğrendiğini kaydet
+### 6. Record what you learned
 
-Ölçüm sırasında yeni bir tuzak bulduysan plugin'in kural dosyasına ekle
-(`playbook.md` / `tailwind.md` / `quality.md`) — bir sonraki sürümle herkese gider.
+If you found a new trap during measurement, add it to the plugin's rule files
+(`playbook.md` / `tailwind.md` / `quality.md`) — it ships to everyone with the next
+release.
 
-Projenin kendi karar günlüğü varsa oraya da satır ekle; **yoksa atla.**
+If the project keeps its own decision log, add a line there too; **otherwise skip it.**

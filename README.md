@@ -1,87 +1,89 @@
 # d2c — Design to Code (Adobe XD)
 
-Adobe XD tasarımlarını ölçüp **doğrulanmış** Tailwind + React koduna çevirir.
+Measures Adobe XD designs and turns them into **verified** Tailwind + React code.
 
-Fark şu: değerler gözle okunmuyor, **XD'nin kendi spec panelinden** alınıyor; üretilen
-kod tarayıcıda render edilip **tekrar ölçülerek** tasarımla karşılaştırılıyor.
+The difference: the values are not read by eye, they come from **XD's own spec data**; the
+generated code is rendered in a browser and **measured again** to compare it against the
+design.
 
 ```
 /d2c <xd-link>
    │
-   ├─ önkoşul (Node · .d2c.json · fontlar)        ← MCP artık GEREKMİYOR
-   ├─ xd extract   → design.json   (HTTP + AGC scenegraph, ~1 sn, tarayıcı yok)
-   ├─ sections     → bölüm haritası (probe/kalibrasyon/screenshot yok, ~1 ms)
+   ├─ prerequisites (Node · .d2c.json · fonts)    ← MCP is NO LONGER required
+   ├─ xd extract   → design.json   (HTTP + AGC scenegraph, ~1 s, no browser)
+   ├─ sections     → section map   (no probes/calibration/screenshots, ~1 ms)
    │
-   └─ her bölüm için:
-        ├─ spec          → olcum.json + spec.md   (Claude'un TEK girdisi)
-        ├─ bileşen envanteri ("zaten var mı?")
-        ├─ Tailwind + React üret
-        ├─ render verify → verification.json      (Playwright, ~1,3 sn)
-        ├─ visual diff   → visual.json + hazır kırpmalar (~2,7 sn)
-        ├─ /code-review  → kalite çıtası
-        └─ regresyon                              → code.md + runs.jsonl
+   └─ for each section:
+        ├─ spec          → olcum.json + spec.md   (Claude's ONLY input)
+        ├─ component inventory ("does it already exist?")
+        ├─ generate Tailwind + React
+        ├─ render verify → verification.json      (Playwright, ~1.3 s)
+        ├─ visual diff   → visual.json + ready-made crops (~2.7 s)
+        ├─ /code-review  → quality bar
+        └─ regression                             → code.md + runs.jsonl
 ```
 
-Ölçüm artık XD viewer'ı hiç açmıyor: paylaşım linkinin kendi verdiği scenegraph
-düz HTTP ile okunuyor. Ölçülen kazanç ve yöntem: [docs/benchmark.md](docs/benchmark.md).
+Measurement never opens the XD viewer any more: the scenegraph the share link itself
+provides is read over plain HTTP. Measured gains and method:
+[docs/benchmark.md](docs/benchmark.md).
 
-## Komutlar
+## Commands
 
-| Komut | Ne yapar |
+| Command | What it does |
 |---|---|
-| `/d2c <link> [bölüm\|hepsi]` | Uçtan uca |
-| `/d2c-spec <link> [bölüm]` | Yalnız ölçüm |
-| `/d2c-code <link\|rapor> <bölüm>` | Yalnız kod + doğrulama |
-| `/d2c-verify <bileşen\|rota>` | Mevcut kodu yeniden doğrular |
+| `/d2c <link> [section\|all]` | End to end |
+| `/d2c-spec <link> [section]` | Measurement only |
+| `/d2c-code <link\|report> <section>` | Code + verification only |
+| `/d2c-verify <component\|route>` | Re-verifies existing code |
 
-Skill'lerin altında çalışan CLI doğrudan da kullanılabilir
+The CLI underneath the skills can also be used directly
 (`node "$D2C_ROOT/cli/dist/d2c.mjs" --help`):
 
-| Komut | Ne yapar |
+| Command | What it does |
 |---|---|
-| `doctor` | önkoşul kontrolü |
-| `xd inspect <link>` | ekran listesi + sözleşme sağlığı |
-| `xd smoke <link>` | canlı sözleşme kontrolü — bozulduğunda çıkış kodu 1 (haftalık CI) |
-| `inventory [dizin]` | mevcut bileşen envanteri (AST) — "bu zaten var mı?" |
+| `doctor` | prerequisite check |
+| `xd inspect <link>` | screen list + contract health |
+| `xd smoke <link>` | live contract check — exit code 1 when it breaks (weekly CI) |
+| `inventory [dir]` | current component inventory (AST) — "does this already exist?" |
 
-Her komut `--verbose` (süre özeti) ve `--trace <dosya>` (JSON) kabul eder.
+Every command accepts `--verbose` (duration summary) and `--trace <file>` (JSON).
 
-## Kurulum
+## Installation
 
 ```bash
 claude plugin marketplace add farukozdemirz/claude-plugin-d2c
 claude plugin install d2c@d2c-marketplace
 ```
 
-Sonra **Claude Code'u yeniden başlat** — agent'lar ve skill'ler oturum başında kayda giriyor.
+Then **restart Claude Code** — agents and skills are registered at the start of a session.
 
-Bu repo hem plugin hem kendi katalogu; ayrı bir marketplace reposu gerekmiyor.
-Önkoşullar (Node, opsiyonel Playwright, `.d2c.json`, fontlar) ve
-proje konfigürasyonu: [docs/installation.md](docs/installation.md)
+This repo is both the plugin and its own marketplace; no separate marketplace repo is
+needed. Prerequisites (Node, optional Playwright, `.d2c.json`, fonts) and project
+configuration: [docs/installation.md](docs/installation.md)
 
-## Bir şeyler ters gittiğinde
+## When something goes wrong
 
-[docs/troubleshooting.md](docs/troubleshooting.md) — 14 madde, hepsi gerçekten yaşandı
+[docs/troubleshooting.md](docs/troubleshooting.md) — every entry actually happened
 
-## Aracın yapamadıkları
+## What the tool cannot do
 
-[docs/limitations.md](docs/limitations.md) — **kurmadan önce okuyun.** Vektör/görsel export
-yok, etkileşim okunmuyor, kırılma noktası varsayım, test üretmiyor, paralel çalışmıyor.
+[docs/limitations.md](docs/limitations.md) — **read this before installing.** Interactions
+are not read, breakpoints are an assumption, it generates no tests.
 
-## Kural dosyaları
+## Rule files
 
-Araç ne öğrendiyse buraya yazılı. Yeni bir tuzak bulunduğunda buraya eklenir ve
-plugin sürümü artırılır — herkese yayılır.
+Everything the tool has learned is written down here. When a new trap is found it is added
+here and the plugin version is bumped — so it reaches everyone.
 
-| Dosya | İçerik |
+| File | Contents |
 |---|---|
-| `docs/xd-viewer-notlari.md` | XD'yi tarayıcıda sürmenin 23 doğrulanmış maddesi |
-| `skills/d2c-code/references/tailwind.md` | Kod üretim kuralları (yarı-satır telafisi, font kökü, scrollbar…) |
-| `skills/d2c-code/references/quality.md` | Üretilen bileşenin geçmesi gereken çıta |
-| `skills/d2c/references/segmentation.md` | Ekran ayrıştırma yöntemi |
-| `fixtures/README.md` | Kabul testi fixture'ını kendi tasarımınla nasıl kurarsın |
+| `docs/xd-viewer-notes.md` | The verified items for driving XD in a browser |
+| `skills/d2c-code/references/tailwind.md` | Code generation rules (half-line compensation, font root, scrollbar…) |
+| `skills/d2c-code/references/quality.md` | The bar a generated component has to clear |
+| `skills/d2c/references/segmentation.md` | The screen segmentation method |
+| `fixtures/README.md` | How to set up the acceptance-test fixture with your own design |
 
-## Sürümleme
+## Versioning
 
-- **Minor** — kural/referans eklendiğinde
-- **Major** — komut adı veya `.d2c.json` şeması değiştiğinde
+- **Minor** — when a rule/reference is added
+- **Major** — when a command name or the `.d2c.json` schema changes

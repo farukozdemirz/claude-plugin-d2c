@@ -1,147 +1,151 @@
-# Kurulum
+# Installation
 
-## Önkoşullar
+## Prerequisites
 
-### 0. Node 18+ (zorunlu)
+### 0. Node 18+ (required)
 
-Ölçüm artık `cli/dist/d2c.mjs` üzerinden, **tarayıcısız** yapılıyor. Bundle depoda
-hazır; `npm install` gerekmez.
+Measurement now runs through `cli/dist/d2c.mjs`, **without a browser**. The bundle is
+committed to the repo; no `npm install` is needed.
 
 ```bash
 node "$D2C_ROOT/cli/dist/d2c.mjs" doctor
 ```
 
-### 1. chrome-devtools MCP (doğrulama için zorunlu)
+Verified in CI on Node 18, 20, 22 and 24.
 
-**Ölçüm için artık gerekmiyor.** Gerekli olduğu yerler:
-- `design-diff` ve `visual-diff` doğrulama ajanları (M2/M3'te deterministik olacak)
-- `extractorStrategy: "legacy"` ile çıkarma
+### 1. chrome-devtools MCP (only for the legacy path)
 
-> Not: XD viewer bir SPA ve artboard `<canvas>`'a çizilir — DOM'da içerik yoktur.
-> Ama canvas'a çizilen verinin **kaynağı** düz HTTP ile alınabiliyor; ölçüm yolu
-> bunu kullanıyor.
+**No longer required for measurement.** Where it is still needed:
+- the `design-diff` and `visual-diff` verification agents when Playwright is unavailable
+- extraction with `extractorStrategy: "legacy"`
+
+> Note: the XD viewer is an SPA and the artboard is drawn to a `<canvas>` — there is no
+> content in the DOM. But the **source** of the data drawn to that canvas can be fetched
+> over plain HTTP; that is what the measurement path uses.
 
 ```bash
 claude mcp add chrome-devtools -- npx -y chrome-devtools-mcp@latest --isolated
 ```
 
-> **`--isolated` neden şart:** argümansız kurulumda sunucu Chrome'u hep aynı sabit
-> profille (`~/.cache/chrome-devtools-mcp/chrome-profile`) açar. Chrome bir profili
-> tek seferde tek işleme verdiği için **ikinci bir Claude Code oturumu tarayıcıyı
-> hiç açamaz** ve şu hatayı alır:
+> **Why `--isolated` is mandatory:** installed without arguments, the server always opens
+> Chrome with the same fixed profile (`~/.cache/chrome-devtools-mcp/chrome-profile`).
+> Because Chrome gives a profile to one process at a time, **a second Claude Code session
+> cannot open the browser at all** and gets:
 >
 > ```
 > The browser is already running for .../chrome-profile.
 > Use --isolated to run multiple browser instances.
 > ```
 >
-> `--isolated` her sunucuya kendi geçici profilini verir; oturumlar birbirini
-> kilitlemez. XD *view* linkleri herkese açık olduğu için kalıcı profile
-> (oturum açma, çerez) ihtiyaç yoktur.
+> `--isolated` gives every server its own temporary profile, so sessions do not lock each
+> other out. Since XD *view* links are public, there is no need for a persistent profile
+> (logins, cookies).
+
+Verify: in a fresh session `mcp__chrome-devtools__list_pages` must be callable.
+
+### 2. Playwright (for verification)
+
+`render verify` and `visual diff` use the system's Chrome — they **do not download a
+binary**.
 
 ```bash
+npm i -D playwright-core     # in the target project
 ```
 
-Doğrula: yeni bir oturumda `mcp__chrome-devtools__list_pages` çağrılabiliyor olmalı.
+Without it, measurement (`xd extract` / `sections` / `spec`) **still works**; only the
+verification commands do not. `d2c doctor` tells you the status.
 
-### 2. Playwright (doğrulama için)
+### 3. Python — **no longer required** (1.11.0)
 
-`render verify` ve `visual diff` sistemdeki Chrome'u kullanır — **binary indirmez**.
+**Pillow (PIL) is not needed at all on the normal path.** The visual comparison moved to
+TypeScript in 1.11.0 and its equivalence with PIL was proven at the pixel level (across 8
+cases the raw/structural difference is **exactly 0**; the heat map and crops are byte for
+byte identical). The code is bundled inside `cli/dist/d2c.mjs` — there is nothing to
+install.
 
-```bash
-npm i -D playwright-core     # hedef projede
-```
+**Since 1.12.0 `python3` itself is no longer called on the normal path either.** The
+component inventory moved to `d2c inventory` (AST based, in the bundle).
 
-Yoksa ölçüm (`xd extract` / `sections` / `spec`) **yine çalışır**; yalnız doğrulama
-komutları çalışmaz. `d2c doctor` durumu söyler.
+The remaining Python scripts are only used on **optional paths**, and both need Pillow:
 
-### 3. Python — **artık zorunlu değil** (1.11.0)
-
-**Pillow (PIL) normal akışta hiç gerekmiyor.** Görsel karşılaştırma 1.11.0'da
-TypeScript'e taşındı ve piksel düzeyinde PIL ile eşdeğerliği kanıtlandı
-(8 durumda ham/yapısal fark **tam 0**; ısı haritası ve kırpmalar bayt bayt aynı).
-Kod `cli/dist/d2c.mjs` içine gömülü — kurulacak bir şey yok.
-
-**1.12.0'dan beri normal akışta `python3` de hiç çağrılmıyor.** Bileşen envanteri
-`d2c inventory`'ye (AST tabanlı, bundle'da) taşındı.
-
-Kalan Python script'leri yalnız **isteğe bağlı yollarda**, ikisi de Pillow istiyor:
-
-| Script | Ne zaman | PIL? |
+| Script | When | PIL? |
 |---|---|---|
-| `section-map.py` | **yalnız** `extractorStrategy: "legacy"` | evet |
-| `visual-diff.py` | **yalnız** `visual diff --motor python` / `--kalibre` | evet |
-| `component-inventory.py` | artık çağrılmıyor — geri dönüş olarak duruyor | hayır (stdlib) |
+| `section-map.py` | **only** with `extractorStrategy: "legacy"` | yes |
+| `visual-diff.py` | **only** with `visual diff --motor python` / `--kalibre` | yes |
+| `component-inventory.py` | no longer called — kept as a fallback | no (stdlib only) |
 
-Yani: Python'u yalnız *legacy yolu* ya da *çapa geri dönüşü* kullanacaksan kur.
+So: install Python only if you are going to use the *legacy path* or the *anchor fallback*.
 
 ```bash
-pip install Pillow     # yalnız legacy / --kalibre için
+pip install Pillow     # only for legacy / --kalibre
 ```
 
-### 4. Node + proje (zorunlu)
+### 4. Node + your project (required)
 
-Doğrulama, üretilen kodu gerçek bir dev server'da render edip ölçüyor. Hedef proje
-çalışır durumda olmalı (`npm run dev` açılabilmeli).
+Verification renders the generated code on a real dev server and measures it. The target
+project has to be runnable (`npm run dev` must start).
 
-### 5. Tasarımın fontları (zorunlu değil ama şiddetle önerilir)
+### 5. The design's fonts (not required, but strongly recommended)
 
-Fontlar projede yüklü değilse **metin ölçüleri kayar**. Araç bunu tespit edip uyarır
-ama kutu ölçüleri dışındaki her şey güvenilmez olur. `next/font/local` ile bağlayın.
+If the fonts are not loaded in the project, **text measurements drift**. The tool detects
+this and warns, but everything beyond box measurements becomes unreliable. Wire them up
+with `next/font/local`.
 
-## Plugin kurulumu
+## Installing the plugin
 
-Bu repo **hem plugin hem de kendi katalogu**. İçindeki
-`.claude-plugin/marketplace.json` `d2c-marketplace` adlı katalogu tanımlıyor ve
-`"source": "./"` ile "plugin bu reponun kökünde" diyor. Yani ayrı bir katalog reposu
-gerekmiyor — repoyu kaydeden plugin'i de kurabilir.
+This repo is **both the plugin and its own marketplace**. The
+`.claude-plugin/marketplace.json` inside it defines a marketplace called `d2c-marketplace`
+and, via `"source": "./"`, says "the plugin is at the root of this repo". So no separate
+marketplace repo is needed — whoever registers the repo can also install the plugin.
 
-### GitHub'dan (normal kullanım)
+### From GitHub (normal use)
 
 ```bash
 claude plugin marketplace add farukozdemirz/claude-plugin-d2c
 claude plugin install d2c@d2c-marketplace
 ```
 
-İlk komut katalogu makinene kaydeder (bir kez), ikincisi plugin'i kurar.
+The first command registers the marketplace on your machine (once), the second installs the
+plugin.
 
-> **Repo private ise** `marketplace add` senin git kimliğinle klonlar; kuracak kişinin
-> repoya erişimi olmalı (SSH anahtarı ya da `gh auth`). Erişimi yoksa komut klonlama
-> hatası verir — plugin hatası değildir.
+> **If the repo is private**, `marketplace add` clones with your git identity; whoever
+> installs it needs access to the repo (an SSH key or `gh auth`). Without access the
+> command fails at the clone step — that is not a plugin error.
 
-**Ekip halinde kullanıyorsanız** katalogu proje kapsamında tanımlayabilirsiniz:
+**If you use it as a team**, you can define the marketplace at project scope:
 
 ```bash
 claude plugin marketplace add farukozdemirz/claude-plugin-d2c --scope project
 ```
 
-Bu, katalog kaydını projenin ayarlarına yazar; repoyu açan herkeste hazır gelir,
-kimse elle `marketplace add` çalıştırmak zorunda kalmaz.
+This writes the marketplace entry into the project's settings; it is then ready for
+everyone who opens the repo, and nobody has to run `marketplace add` by hand.
 
-### Yerel dizinden (bu plugin'i geliştirirken)
+### From a local directory (while developing this plugin)
 
 ```bash
 claude plugin marketplace add /path/to/claude-plugin-d2c
 claude plugin install d2c@d2c-marketplace
 ```
 
-Kaynak dosyaları düzenleyip test etmek için. **Sürümü artırmayı unutma** —
-`plugin update` içeriğe değil sürüm numarasına bakar (bkz. sorun giderme).
+For editing and testing the source files. **Do not forget to bump the version** —
+`plugin update` looks at the version number, not the contents (see troubleshooting).
 
-### Kurulumu doğrula
+### Verify the installation
 
 ```bash
 claude plugin validate /path/to/claude-plugin-d2c --strict
 claude plugin list
 ```
 
-> **Yeni kurulan plugin'in agent'ları bir sonraki oturumda kayda girer.** Kurduktan
-> sonra Claude Code'u yeniden başlatın. "Dosya duruyor" kanıt değil — `/d2c` ilk adımda
-> `design-diff` ve `visual-diff`'i gerçekten çağırarak smoke testi yapar.
+> **A newly installed plugin's agents are registered in the next session.** Restart Claude
+> Code after installing. "The file is there" is not proof — as its first step `/d2c` runs a
+> smoke test by actually calling `design-diff` and `visual-diff`.
 
-## Proje konfigürasyonu
+## Project configuration
 
-Her projede kök dizinde `.d2c.json`. Yoksa `/d2c` ilk çalıştırmada sorup oluşturur.
+Every project needs a `.d2c.json` at its root. If it is missing, `/d2c` asks and creates it
+on the first run.
 
 ```jsonc
 {
@@ -150,38 +154,39 @@ Her projede kök dizinde `.d2c.json`. Yoksa `/d2c` ilk çalıştırmada sorup ol
   "previewDir": "app",
   "devCommand": "npm run dev",
   "devPort": 3005,
-  "fonts": ["<tasarımın gövde fontu>", "<tasarımın başlık fontu>"],
-  // XD spec panelinin gösterdiği aile adları — projede YÜKLÜ olmalı,
-  // yoksa metin ölçüleri sessizce kayar (önkoşul #6 bunu yakalar).
+  "fonts": ["<design body font>", "<design heading font>"],
+  // The family names shown in the XD spec panel — they must be LOADED in the
+  // project, otherwise text measurements silently drift (check #6 catches this).
   "reportDir": "docs/d2c",
   "writeAllowlist": ["components/**", "app/**", "docs/d2c/**"],
   "extractorStrategy": "auto"
 }
 ```
 
-`extractorStrategy`: **`auto`** (varsayılan) ağ yolunu kullanır, sözleşme bozuksa
-teşhisle durur · **`network`** yalnız ağ · **`legacy`** 1.4.0 davranışı
-(chrome-devtools MCP + playbook probe yöntemi). Legacy yol korunuyor.
+`extractorStrategy`: **`auto`** (default) uses the network path and stops with a diagnosis
+if the contract is broken · **`network`** network only · **`legacy`** 1.4.0 behaviour
+(chrome-devtools MCP + the playbook probe method). The legacy path is preserved.
 
-Tailwind v3 kullanıyorsanız: `"styling": { "tailwind": 3, "config": "tailwind.config.js" }`
+If you use Tailwind v3:
+`"styling": { "tailwind": 3, "config": "tailwind.config.js" }`
 
-## İlk çalıştırma
+## First run
 
 ```
-/d2c https://xd.adobe.com/view/<id>/screen/<screen-id>/specs/
+/d2c https://xd.adobe.com/view/<id>/specs/
 ```
 
-Ekranı bölümlere ayırır, haritayı gösterir, hangi bölümü üreteceğinizi sorar.
+It splits the screen into sections, shows the map, and asks which section to generate.
 
-| Komut | Ne yapar |
+| Command | What it does |
 |---|---|
-| `/d2c <link> [bölüm\|hepsi]` | Uçtan uca: ayrıştır → ölç → üret → doğrula → review |
-| `/d2c-spec <link> [bölüm]` | Yalnız ölçüm, kod üretmez |
-| `/d2c-code <link\|rapor> <bölüm>` | Yalnız kod üretimi + doğrulama halkası |
-| `/d2c-verify <bileşen\|rota>` | Mevcut kodu yeniden doğrular |
+| `/d2c <link> [section\|all]` | End to end: segment → measure → generate → verify → review |
+| `/d2c-spec <link> [section]` | Measurement only, generates no code |
+| `/d2c-code <link\|report> <section>` | Code generation + the verification loop only |
+| `/d2c-verify <component\|route>` | Re-verifies existing code |
 
-## Güncelleme
+## Updating
 
 ```bash
-/plugin update d2c     # yeniden başlatma gerekir
+/plugin update d2c     # a restart is required
 ```

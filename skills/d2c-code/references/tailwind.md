@@ -1,24 +1,26 @@
-# Tailwind kod üretim kuralları
+# Tailwind code generation rules
 
-Tahminle yazılan Tailwind tasarımı tutturmaz. Aşağıdakiler bunun neden olduğunu ve nasıl
-önleneceğini anlatıyor.
+Tailwind written from guesswork does not match the design. What follows explains why that
+happens and how to avoid it.
 
-## Kaynak disiplini
+## Source discipline
 
-- **Asla screenshot'tan tahmin etme.** Sadece raporda **P** (panelden okunan) ve
-  **hesaplanan** (kutu farkından türetilen) değerler kullanılır.
-- Rapor bir değeri içermiyorsa **uydurma** — `{/* TODO: <ne eksik> ölçülmedi */}` bırak
-  ve rapordaki TODO listesine yaz.
-- Gözle "8" okunan bir radius ölçümde 12 çıktı. Tahmin sessizce yanlış kod üretir;
-  yanlış kod doğrulamadan geçmez ama tur harcatır.
+- **Never guess from a screenshot.** Only values marked **P** (read from the panel) and
+  **computed** (derived from box differences) in the report may be used.
+- If the report does not contain a value, **do not invent it** — leave
+  `{/* TODO: <what is missing> was not measured */}` and add it to the report's TODO list.
+- A radius that looked like "8" by eye measured 12. Guessing silently produces wrong code;
+  wrong code does not pass verification, but it burns a round.
 
-## Renk
+## Colour
 
-- Tema token'ı hex'in **birebir** karşılığıysa token sınıfını kullan (`bg-blue-4`).
-- Değilse arbitrary: `text-[#FFC700]`. "Yakın" token kullanma — renkte tolerans yok.
-- **Config'i kendiliğinden değiştirme.** Tailwind v4'te tema `app/globals.css` içindeki
-  `@theme` bloğudur ve paylaşılan bir yüzeydir; tek bir bileşen için değiştirmek başka
-  ekranları etkiler. Rapora "eklenmesi önerilen token" listesi yaz:
+- If a theme token is an **exact** match for the hex, use the token class (`bg-blue-4`).
+- Otherwise use an arbitrary value: `text-[#FFC700]`. Do not use a "close" token — there
+  is no tolerance on colour.
+- **Do not change the config on your own initiative.** In Tailwind v4 the theme is the
+  `@theme` block inside `app/globals.css` and it is a shared surface; changing it for a
+  single component affects other screens. Write a "tokens worth adding" list into the
+  report instead:
   ```css
   @theme {
     --color-brand-navy: #0C2380;   /* -> bg-brand-navy, text-brand-navy */
@@ -27,48 +29,53 @@ Tahminle yazılan Tailwind tasarımı tutturmaz. Aşağıdakiler bunun neden old
 
 ## Spacing
 
-- 4px ızgarasına **≤2px** uzaklıktaysa ızgara sınıfı: 24 → `p-6`, 16 → `gap-4`.
-- Değilse arbitrary: 9 → `mt-[9px]`, 26 → `pb-[26px]`.
-- **Yuvarlama yaptıysan raporda belirt** — 26'yı `pb-6`(24) yapmak 2px sapma demektir ve
-  bu tolerans içinde kalır ama tasarım öyle demiyor.
+- If it is within **≤2px** of the 4px grid, use a grid class: 24 → `p-6`, 16 → `gap-4`.
+- Otherwise use an arbitrary value: 9 → `mt-[9px]`, 26 → `pb-[26px]`.
+- **If you rounded, say so in the report** — turning 26 into `pb-6` (24) is a 2px
+  deviation; it stays inside tolerance, but that is not what the design says.
 
-## Tipografi
+## Typography
 
-Tailwind'in varsayılan line-height'ları XD ile **çoğu zaman tutmaz**:
+Tailwind's default line-heights **usually do not match** XD:
 
-| Sınıf | Tailwind | XD isteyebilir |
+| Class | Tailwind | XD may want |
 |---|---|---|
 | `text-lg` | 18px / 28px | 18 / 22 |
 | `text-sm` | 14px / 20px | 14 / 17 |
 | `text-xs` | 12px / 16px | 12 / 14 |
 
-font-size sınıfını kullan ama **line-height'ı her zaman açıkça yaz**:
-`text-lg leading-[22px]`. Tek istisna: XD'nin line-height'ı Tailwind'inkiyle birebir
-aynıysa bile açıkça yazmak zararsız — yaz.
+Use the font-size class but **always write the line-height explicitly**:
+`text-lg leading-[22px]`. The one exception: even when XD's line-height happens to match
+Tailwind's exactly, writing it explicitly is harmless — write it.
 
-- letter-spacing panelde `-0.2px` gibi çıkarsa `tracking-[-0.2px]`. `0px` ise yazma.
+- If letter-spacing shows as something like `-0.2px` in the panel, use
+  `tracking-[-0.2px]`. If it is `0px`, omit it.
 - font-weight: XD "Bold" → `font-bold` (700), "Medium" → `font-medium` (500),
   "Regular" → `font-normal` (400), "Light" → `font-light` (300).
 
-## Yükseklik
+## Height
 
-- Kart/panel gibi sabit yüksekliği `h-[204px]` ile sabitleme — içerik değişince taşar.
-  Mümkünse **padding + içerikten türet**.
-- Sabit gerekiyorsa `min-h-[204px]` tercih et.
-- Doğrulamada yükseklik tutmuyorsa sebebi genelde satır kutusudur, `h-*` eksikliği değil.
+- Do not pin a card/panel height with `h-[204px]` — it overflows when the content changes.
+  Where possible, **derive it from padding + content**.
+- If a fixed value is required, prefer `min-h-[204px]`.
+- When the height does not match during verification, the cause is usually the line box,
+  not a missing `h-*`.
 
 ## Responsive
 
-- **Mobil base, desktop `lg:`.** `lg:` varsayılan 1024px; tasarımın kırılma noktası
-  farklıysa `@theme` içinde `--breakpoint-*` önerisi yaz (sen ekleme).
-- İki artboard arasında eleman **sırası** değişiyorsa DOM'u kopyalama —
-  flex + `order-*` kullan. İki ayrı DOM ağacı iki kat bakım ve erişilebilirlik sorunu.
-- Tek artboard varsa responsive davranışı **uydurma**; base yaz, TODO bırak.
+- **Mobile is the base, desktop is `lg:`.** `lg:` defaults to 1024px; if the design's
+  breakpoint differs, suggest a `--breakpoint-*` entry inside `@theme` (do not add it
+  yourself).
+- If element **order** changes between the two artboards, do not duplicate the DOM — use
+  flex + `order-*`. Two separate DOM trees mean double maintenance and an accessibility
+  problem.
+- With only one artboard, do **not invent** responsive behaviour; write the base and leave
+  a TODO.
 
-## className prop'u
+## The className prop
 
-Dışarıdan sınıf alan bileşenlerde `twMerge` kullan — yoksa `className="p-4"` ile gelen
-sınıf, bileşenin kendi `p-6`'sıyla çakışır ve hangisinin kazanacağı CSS sırasına kalır:
+Use `twMerge` in components that accept an external class — otherwise a class arriving via
+`className="p-4"` collides with the component's own `p-6` and CSS order decides the winner:
 
 ```tsx
 import { twMerge } from 'tailwind-merge'
@@ -77,82 +84,87 @@ export function Card({ className, ...props }: Props) {
 }
 ```
 
-`tailwind-merge` kurulu değilse kur (`npm i tailwind-merge`) ve raporda belirt.
+If `tailwind-merge` is not installed, install it (`npm i tailwind-merge`) and note it in
+the report.
 
 ## Container / gutter
 
-Tasarım 1440'ta 64px gutter kullanıyorsa ve projenin `container`'ı 16px padding
-veriyorsa farkı kapat: `lg:px-16`. Gutter'ı raporda **hesaplanan** olarak göster
-(ör. `sol gutter 63.5 = ilk kart.x`).
+If the design uses a 64px gutter at 1440 and the project's `container` gives 16px padding,
+close the gap: `lg:px-16`. Show the gutter in the report as **computed**
+(e.g. `left gutter 63.5 = first card.x`).
 
-## Font yüklü değilse ölçüm kayar
+## If the font is not loaded, the measurement drifts
 
-Doğrulamadan **önce** tasarımdaki font ailesinin projede yüklü olduğunu kontrol et:
+**Before** verifying, check that the design's font family is actually loaded in the
+project:
 
 ```js
 document.fonts.check('16px "Bw Modelica"')
 ```
 
-- Yüklü değilse tarayıcı fallback kullanır; metin **genişlikleri** ve **satır kutusu
-  yükseklikleri** kayar — kutu ölçüleri (padding, radius, border, renk) yine geçerlidir.
-- Bu durumda fark tablosunu yine ver ama raporda **"font eksik"** uyarısı koy ve metin
-  kaynaklı satırları `⚠` ile işaretle. Ticari font (Bw Modelica gibi) çoğu projede
-  yoktur — bu geçerli bir sonuçtur, gizlenecek bir hata değil.
-- Fallback seçerken metriği yakın bir aile kullan ve `font-family` zincirini raporda yaz.
+- If it is not loaded, the browser uses a fallback; text **widths** and **line box
+  heights** drift — box measurements (padding, radius, border, colour) remain valid.
+- In that case still produce the difference table, but put a **"font eksik"** warning in
+  the report and mark text-derived rows with `⚠`. A commercial font is missing in most
+  projects — that is a valid outcome, not an error to hide.
+- When choosing a fallback, use a family with close metrics and write the `font-family`
+  chain into the report.
 
-## Görseller ve ikonlar — artık export ediliyor
+## Images and icons — these are exported now
 
 ```bash
-node "$D2C_ROOT/cli/dist/d2c.mjs" xd assets "<xd link>" --screen "<ekran>" \
+node "$D2C_ROOT/cli/dist/d2c.mjs" xd assets "<xd link>" --screen "<screen>" \
   --out-dir public/d2c
 ```
 
-- **İkonlar** gerçek SVG olarak çıkar (`public/d2c/icon/`). Yol verisi kaynaktan
-  birebir; **yaklaşık çizme yok**. Özdeş ikonlar tek dosyaya iner.
-- **Görseller** `public/d2c/image/` altına iner (genelde WebP).
+- **Icons** come out as real SVG (`public/d2c/icon/`). The path data is verbatim from the
+  source; **no approximate drawing**. Identical icons collapse into one file.
+- **Images** land under `public/d2c/image/` (usually WebP).
   `olcekDavranisi: "fill"` → `object-fit: cover`.
-- **Atlananlar raporlanır**: gradient dolgu ve clipPath maskesi hâlâ çevrilemiyor.
-  Rapordaki her kalem için `{/* TODO */}` bırak — sessizce geçme.
+- **Skipped items are reported**: gradient fills and clipPath masks still cannot be
+  converted. Leave a `{/* TODO */}` for each item in the report — do not pass over them
+  silently.
 
-Export çalıştırılmadıysa eski davranış geçerli: doğru boyutta placeholder +
-`{/* TODO: görsel XD'den export edilmeli */}`.
+If the export was not run, the old behaviour applies: a placeholder at the correct size
+plus `{/* TODO: image must be exported from XD */}`.
 
-## Birikimli sapma
+## Cumulative drift
 
-XD metin kutusu yüksekliği ile CSS satır kutusu aynı şey değildir; dikey konumlar
-aşağı doğru **~2-3px kayabilir** ve bu kayma birikir.
+The XD text box height and the CSS line box are not the same thing; vertical positions can
+drift **~2-3px downward**, and that drift accumulates.
 
-- Kontrolü **ilk elemandan başlat**, aşağı doğru ilerle.
-- Sapma aşağı indikçe **büyüyorsa** kaynağı o elemanın kendisi değil, **üstündeki
-  boşluktur** — oradaki `margin`/`leading` değerini düzelt.
-- Sapma sabit kalıyorsa tek seferlik bir offset vardır (genelde ilk elemanın
-  `leading`'i veya konteynerin `padding-top`'u).
+- **Start checking from the first element** and work downward.
+- If the deviation **grows** as you go down, the source is not that element but the **space
+  above it** — fix the `margin`/`leading` there.
+- If the deviation stays constant, there is a one-off offset (usually the first element's
+  `leading` or the container's `padding-top`).
 
 ---
 
-## Yarı-satır boşluğu (half-leading) — en sık yapılan hata
+## Half-leading — the most common mistake
 
-**XD'nin metin kutusu yüksekliği ile CSS'in satır kutusu yüksekliği aynı şey değildir.**
+**The XD text box height and the CSS line box height are not the same thing.**
 
-- XD, otomatik yükseklikli metin çerçevesi için `(n−1) × line-height + fontKutusu` verir.
-- CSS ise `n × line-height` render eder.
-- Fark `line-height − fontKutusu` kadardır ve **yarısı üstte, yarısı altta** durur.
+- For an auto-height text frame XD reports `(n−1) × line-height + fontBox`.
+- CSS renders `n × line-height`.
+- The difference is `line-height − fontBox`, and **half sits above, half below**.
 
-### fontKutusu'nu VARSAYMA — tarayıcıda ÖLÇ
+### Do NOT assume fontBox — MEASURE it in the browser
 
-`fontKutusu ≈ 1.25 × font-size` **her aile için doğru değil.** Bw Modelica'da tutuyor
-(12→15, 16→20, 18→22, 24→29, 32→38) ama **Tobias'ta 1.375** çıktı: 48px'te tarayıcının
-`fontBoundingBox` toplamı **66px**. Bu farkı varsaymak başlığı **4px aşağı kaydırdı** ve
-`design-diff` göremedi (kutu doğru, glif yanlış) — ancak görsel diff yakaladı, yani
-**bir tur harcandı**. Aynı hata iki ayrı ekranda tekrarlandı.
+`fontBox ≈ 1.25 × font-size` **is not true for every family.** It holds for Bw Modelica
+(12→15, 16→20, 18→22, 24→29, 32→38) but came out at **1.375 for Tobias**: at 48px the
+browser's `fontBoundingBox` sum was **66px**. Assuming that difference shifted the heading
+**4px down**, and `design-diff` could not see it (the box was right, the glyph was wrong) —
+only the visual diff caught it, meaning **a round was burned**. The same mistake repeated
+on two separate screens.
 
-Kod yazmadan **önce** kullanacağın her aile/punto için tek çağrıda ölç:
+**Before** writing code, measure every family/size pair you will use in a single call:
 
 ```js
 async () => {
   await document.fonts.ready;
   const c = document.createElement('canvas').getContext('2d');
-  // Kullanılacak aile/punto çiftleri — üretilen ad, XD'deki değil
+  // The family/size pairs you will use — the GENERATED name, not XD's
   const cift = [['tobias', 48], ['tobias', 28], ['bwModelica', 18], ['bwModelica', 16]];
   return cift.map(([aile, px]) => {
     c.font = `${px}px "${aile}"`;
@@ -163,59 +175,60 @@ async () => {
 }
 ```
 
-Dönen `fontKutusu` ile yarı-satırı hesapla. **`oran` 1.25'ten belirgin sapıyorsa
-`spec.md`'ye yaz** — o aile için kural farklı.
+Compute the half-line from the returned `fontKutusu`. **If `oran` deviates noticeably from
+1.25, write it into `spec.md`** — the rule is different for that family.
 
-**Sonucu iki yerde görürsün:**
+**You see the effect in two places:**
 
-1. **Metin elemanının yüksekliği** XD'den büyük çıkar (ör. 18/28 tek satır: XD 22, CSS 28).
-   Bu bir hata değil — iki farklı ölçü. `design-diff` prompt'una "metin yüksekliği
-   satırlarını `✓ (metin çerçevesi)` say" diye yaz.
-2. **Alttaki her şey kayar ve kayma birikir.** Kart yüksekliği XD'yi tutmaz.
+1. **The text element's height** comes out larger than XD's (e.g. 18/28 on a single line:
+   XD says 22, CSS says 28). This is not an error — they are two different measurements.
+   Tell the `design-diff` prompt to "count text height rows as `✓ (metin çerçevesi)`".
+2. **Everything below it shifts, and the shift accumulates.** The card height will not
+   match XD.
 
-**Telafi:** `line-height > fontKutusu` olan metnin **üstündeki ve altındaki boşluğu**
-yarı-satır kadar kıs:
+**Compensation:** shrink the space **above and below** text whose
+`line-height > fontBox` by the half-line:
 
 ```
-yarıSatır = (lineHeight − fontKutusu) / 2
-üstBoşluk_css = üstBoşluk_xd − yarıSatır      (bir üstteki elemanın da yarı-satırı varsa onu da düş)
-altBoşluk_css = altBoşluk_xd − yarıSatır
+halfLine   = (lineHeight − fontBox) / 2
+spaceAbove_css = spaceAbove_xd − halfLine   (also subtract the element above's half-line, if it has one)
+spaceBelow_css = spaceBelow_xd − halfLine
 ```
 
-Doğrulanmış örnek — 16/27 gövde metni (fontKutusu 20, yarıSatır 3.5):
-`mt-[4.5px]` (XD 8) ve altındaki satıra `mt-[12.5px]` (XD 16) → kart yüksekliği
-**248.88** çıktı, XD **248.89**. Telafisiz hali 256 idi.
+A verified example — 16/27 body text (fontBox 20, halfLine 3.5):
+`mt-[4.5px]` (XD 8) and `mt-[12.5px]` (XD 16) on the line below produced a card height of
+**248.88**, against XD's **248.89**. Without compensation it was 256.
 
-`line-height = fontKutusu` olan metinlerde (18/22, 14/17, 20/24, 16/20) telafi
-**gerekmez** — boşlukları XD'deki gibi bırak.
+For text where `line-height = fontBox` (18/22, 14/17, 20/24, 16/20) compensation is **not
+needed** — leave the spacing exactly as XD has it.
 
-## Font ailesini bölüm kökünde kur
+## Set the font family on the section root
 
-`globals.css` `body`'ye bir fallback aile veriyor olabilir (`Arial, Helvetica, sans-serif`).
-Bileşen ailesini sadece alt bileşenlerde kurarsan, **bölümün kendi metinleri sessizce
-fallback'e düşer** — font-size/line-height/renk doğru görünür, sadece aile yanlıştır ve
-bunu gözle fark etmezsin. Aileyi bölümün kök elemanına yaz:
+`globals.css` may be giving `body` a fallback family (`Arial, Helvetica, sans-serif`). If
+you set the component family only on child components, **the section's own text silently
+falls back** — font-size, line-height and colour all look right, only the family is wrong,
+and you will not notice by eye. Put the family on the section's root element:
 
 ```
 "[font-family:var(--font-modelica),ui-sans-serif,system-ui,sans-serif]"
 ```
 
-Sonra `design-diff`'e her elemanın computed `fontFamily`'sini raporlat.
+Then have `design-diff` report each element's computed `fontFamily`.
 
-## Blok genişliği ≠ XD metin çerçevesi genişliği
+## Block width ≠ XD text frame width
 
-XD bir başlık için `W 319px` diyorsa bu **metnin** genişliğidir. CSS'te `<h2>` blok
-elemandır ve kabı doldurur (1312 çıkar). Görsel olarak fark etmez ama ölçüm tutmaz ve
-daha kötüsü: **metnin nerede sardığını kaybedersin.**
+When XD says `W 319px` for a heading, that is the width of the **text**. In CSS an `<h2>`
+is a block element and fills its container (you get 1312). Visually it makes no difference,
+but the measurement will not match — and worse: **you lose where the text wraps.**
 
-- Tek satırlık başlık → `w-fit`
-- Saran paragraf → XD'nin çerçeve genişliği `max-w-[725px]` (sarma noktası budur)
+- Single-line heading → `w-fit`
+- Wrapping paragraph → XD's frame width as `max-w-[725px]` (that is the wrap point)
 
-## `overflow-x-auto` mobilde altındaki her şeyi kaydırır
+## `overflow-x-auto` pushes everything below it down on mobile
 
-Yatay kaydırmalı şeritte (carousel) klasik kaydırma çubuğu **15px** yer kaplar ve
-şeridin altındaki elemanları aşağı iter — ölçümde "24 olması gereken boşluk 39 çıktı"
-şeklinde görünür. Tasarımda çubuk yoktur; gizle:
+On a horizontally scrolling strip (a carousel) the classic scrollbar takes **15px** and
+pushes the elements below the strip downward — in the measurement this shows up as "the gap
+that should be 24 came out 39". There is no scrollbar in the design; hide it:
 
 ```
 "overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -224,48 +237,51 @@ Yatay kaydırmalı şeritte (carousel) klasik kaydırma çubuğu **15px** yer ka
 
 ---
 
-# XD ölçüsünü CSS'e çevirirken — yargı kuralları
+# Translating an XD measurement into CSS — judgement rules
 
-Bunlar eski `playbook.md`'den **terfi etti** (§14, §18, §19, §21). Ölçüm artık
-otomatik; ama bu dört nokta hâlâ **senin kararın** ve hâlâ hata kaynağı.
+These were **promoted** from the old `playbook.md` (§14, §18, §19, §21). Measurement is
+automatic now; but these four points are still **your call** and still a source of errors.
 
-## Boşluk, kutulardan türetilir  *(§14)*
+## Spacing is derived from boxes  *(§14)*
 
-`padding` ve `gap` tasarım verisinde ayrı bir alan olarak **yoktur**; komşu kutuların
-farkından çıkar:
+`padding` and `gap` **do not exist** as separate fields in the design data; they come out
+of the difference between neighbouring boxes:
 
 ```
-sol padding = içerik.x − kutu.x
-gap         = kutu2.x − (kutu1.x + kutu1.w)
+left padding = content.x − box.x
+gap          = box2.x − (box1.x + box1.w)
 ```
 
-`olcum.json`'daki `hesaplanan` bunu senin için yapıyor ve her kaydın `nasil` alanı
-hangi iki kutudan türediğini söylüyor. **Kendin yeniden hesaplama**; ama `nasil`'ı
-oku — bölümün yapısına göre doğru yorum değişir.
+The `hesaplanan` field in `olcum.json` does this for you, and each record's `nasil` field
+says which two boxes it was derived from. **Do not recompute it yourself**; but do read
+`nasil` — the right interpretation depends on the section's structure.
 
-## Metin kutusu ≠ mürekkep kutusu  *(§18)*
+## Text box ≠ ink box  *(§18)*
 
-İkon/glif elemanlarının kutusu yan boşlukları (side bearing) içerir; görünen mürekkep
-~1px dar olur. Konum karşılaştırırken ikisini karıştırma.
+The box of an icon/glyph element includes its side bearings; the visible ink is ~1px
+narrower. Do not conflate the two when comparing positions.
 
-Pratik sonucu `olcum.json`'da görünür: bir bölümün "en soldaki içeriği" bir glif ise
-padding olduğundan küçük çıkar. `hesaplanan`'daki `nasil` alanı hangi elemandan
-geldiğini ve en sık hizalanmayı birlikte verir — **kararı sen verirsin**.
+The practical consequence is visible in `olcum.json`: if a section's "leftmost content" is
+a glyph, the padding comes out smaller than it really is. The `nasil` field in `hesaplanan`
+gives you both the element it came from and the most common alignment — **the decision is
+yours**.
 
-## Bir artboard'ın değerini diğerine TAŞIMA  *(§19)*
+## Do NOT carry one artboard's value to the other  *(§19)*
 
-Aynı işi gören, aynı adı taşıyan iki eleman iki artboard'da farklı olabilir.
-Doğrulanmış: özet barı desktop'ta radius **12**, mobilde **8**; üstelik desktop'taki
-bir `Path`, mobildeki bir `Rectangle`.
+Two elements doing the same job and carrying the same name can differ between artboards.
+Verified: a summary bar had radius **12** on desktop and **8** on mobile; on top of that
+the desktop one was a `Path` and the mobile one a `Rectangle`.
 
-`olcum.json` bu yüzden `desktop` ve `mobil` ölçülerini **ayrı** taşıyor ve hiçbiri
-diğerinden türetilmiyor. "Mobilde 8'di, desktop da 8'dir" çıkarımı yanlış kod üretir.
+This is why `olcum.json` carries the `desktop` and `mobil` measurements **separately**, and
+neither is derived from the other. Concluding "it was 8 on mobile, so desktop is 8 too"
+produces wrong code.
 
-## Stroke: geometri kenarı ≠ görsel kenar  *(§21)*
+## Stroke: geometry edge ≠ visual edge  *(§21)*
 
-*Center Stroke*'ta geometri kenarı ile görsel kenar yarım stroke kayar: 2px stroke'lu
-iki 48×48 butonda geometriden **17**, görsel dıştan **15** çıkar.
+With *Center Stroke* the geometry edge and the visual edge differ by half a stroke: between
+two 48×48 buttons with a 2px stroke you measure **17** from the geometry and **15** from the
+visual outside edge.
 
-`olcum.json` `kontur.hiza` alanını veriyor (`inside` / `outside` / `center`).
-CSS `border` kutunun **içine** çizdiği için koddaki `gap` geometri değerine değil
-görsel değere yakın durur. Hangisini kullandığını **raporda yaz**.
+`olcum.json` gives you the `kontur.hiza` field (`inside` / `outside` / `center`). Because a
+CSS `border` is drawn **inside** the box, the `gap` in the code ends up closer to the visual
+value than to the geometry one. **Write in the report** which one you used.
