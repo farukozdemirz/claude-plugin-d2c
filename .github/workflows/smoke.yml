@@ -1,0 +1,53 @@
+# Haftalık canlı sözleşme kontrolü.
+#
+# XD viewer private bir implementasyon. Adobe sessizce bir şey değiştirirse bunu
+# bir kullanıcı koşusunda öğrenmek en pahalı yol — amaç önce burada öğrenmek.
+#
+# Link repo değişkeninden gelir (`XD_SMOKE_URL`). TANIMLI DEĞİLSE iş ATLANIR,
+# kırmaz: "link yok" bir sözleşme bozulması değildir ve kırmızı bir CI'nın
+# anlamını aşındırır.
+name: smoke
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'   # her pazartesi 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  sozlesme:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: cli/package-lock.json
+
+      - name: Bağımlılıklar
+        working-directory: cli
+        run: npm ci
+
+      - name: Link tanımlı mı
+        id: link
+        run: |
+          if [ -z "${{ vars.XD_SMOKE_URL }}" ]; then
+            echo "var=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::XD_SMOKE_URL tanımlı değil — canlı smoke atlandı."
+          else
+            echo "var=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Sözleşme kontrolü
+        if: steps.link.outputs.var == 'true'
+        working-directory: cli
+        run: node dist/d2c.mjs xd smoke "${{ vars.XD_SMOKE_URL }}" --json -o smoke.json
+
+      # Çıktıda token yoktur (`smoke.ts` redakte eder, testle sabit) — artefakt güvenli.
+      - name: Sonucu sakla
+        if: always() && steps.link.outputs.var == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-sonuc
+          path: cli/smoke.json
+          if-no-files-found: ignore

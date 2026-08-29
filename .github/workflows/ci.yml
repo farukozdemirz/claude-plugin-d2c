@@ -1,0 +1,68 @@
+# Test + sözleşme + güvenlik taraması.
+#
+# Testlerin neredeyse tamamı ağsız: AGC yanıtları fixture, görsel diff sentetik
+# PNG çiftleri. Bu yüzden CI Adobe'nin erişilebilirliğine bağlı DEĞİL — canlı
+# bağımlılık yalnız `smoke.yml`'da.
+name: ci
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: cli/package-lock.json
+
+      - name: Bağımlılıklar
+        working-directory: cli
+        run: npm ci
+
+      # Doğrulama testleri sistem Chrome'unu kullanır (binary indirilmez).
+      # Kurulamazsa testler ATLANIR, kırılmaz — guard gerçekten açmayı dener.
+      - name: Chrome
+        uses: browser-actions/setup-chrome@v1
+        continue-on-error: true
+
+      - name: Test
+        working-directory: cli
+        run: npm test
+
+      # `npm test` içindeki token-scan zaten depo genelini tarıyor; burada
+      # ayrıca çalıştırmak, testler bir sebeple atlanırsa bile taramanın
+      # koştuğunu garanti ediyor.
+      - name: Kural 2 — token taraması
+        working-directory: cli
+        run: node --test test/token-scan.test.mjs
+
+  manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Plugin manifest tutarlılığı
+        run: node .github/scripts/check-manifest.mjs
+
+      # `claude plugin validate --strict` kimlik doğrulama isteyebildiği için
+      # bloklayıcı değil; asıl kapı yukarıdaki yapısal kontrol.
+      - name: claude plugin validate (bloklayıcı değil)
+        continue-on-error: true
+        run: |
+          npm i -g @anthropic-ai/claude-code >/dev/null 2>&1 || exit 0
+          claude plugin validate . --strict || true
