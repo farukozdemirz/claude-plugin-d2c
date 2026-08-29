@@ -36,8 +36,18 @@ node "$D2C" visual diff --olcum "<reportDir>/<slug>/olcum.json" \
   --out-dir "<reportDir>/<slug>/gorsel"
 ```
 
-Together they take **~4 s**. If there is no `sapan` in `verification.json` and no
-deviating region in `visual.json`, the verification is clean — do not call an agent.
+```bash
+node "$D2C" render robust --olcum "<reportDir>/<slug>/olcum.json" --url "<route>" \
+  --json -o "<reportDir>/<slug>/robust.json"
+```
+
+Together they take **~6 s**. If there is no `sapan` in `verification.json`, no error in
+`robust.json` and no deviating region in `visual.json`, the verification is clean — do not
+call an agent.
+
+`render robust` checks the layout at 1920/1440/1366/1280/1024: overlap, horizontal
+overflow and container escapes are **errors**; text reflow is information. A refactor that
+replaced a flexible width with a fixed one shows up here and nowhere else.
 
 > **Engine (1.11.0).** The visual comparison now runs in TypeScript; **Python + PIL are
 > not required**. If you doubt the result, `--motor python` runs the old script (their

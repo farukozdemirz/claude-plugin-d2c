@@ -12,6 +12,109 @@ happens and how to avoid it.
 - A radius that looked like "8" by eye measured 12. Guessing silently produces wrong code;
   wrong code does not pass verification, but it burns a round.
 
+## Layout intent — XD coordinates are NOT CSS positioning
+
+**This is the single most consequential rule in this file.** A design is drawn at one
+width; the code has to work at all of them.
+
+```
+XD measurements = source of truth for visual geometry
+XD coordinates != CSS positioning
+```
+
+A measured real failure: a header from a 1920 design was written out as absolute pixels.
+At 1920 it was pixel-perfect. On a laptop the Search button sat on top of the input and
+`Login / Wishlist / Cart` collapsed into each other.
+
+### Read the relationships before writing a single class
+
+`olcum.json` gives you the raw material: `ebeveyn` (hierarchy), `sira` (paint order),
+`hesaplanan` (gaps, with `nasil` saying which two boxes each came from), `tekrar`
+(repeated series). Before converting anything, answer:
+
+- Which elements share a container?
+- Which must stay on one line?
+- **Which one absorbs the leftover space?** (usually exactly one)
+- Which have a fixed or minimum width?
+- Which gaps are real, and which are just slack?
+- Does the container have a `max-width`, or is it full-bleed?
+
+### The two kinds of gap — the distinction that decides the layout
+
+Not every gap in a design means the same thing. In the header above:
+
+| gap | value | what it really is |
+|---|---|---|
+| logo → search | 416 px | **slack** — the room left over at 1920 |
+| search → actions | 60 px | **a real gap** — the designer's spacing |
+
+Writing both as fixed pixels is what breaks the layout. The slack must collapse first as
+the window narrows; the real gap must not.
+
+### Worked example — the same design, both ways
+
+The design: logo 140 · search 920 · actions 256 · page padding 64 · gaps 416 and 60.
+
+```html
+<!-- WRONG — coordinates copied out. Correct at 1920, broken below it. -->
+<header class="relative h-[72px]">
+  <div class="absolute left-[64px]  top-[20px] w-[140px]">…</div>
+  <div class="absolute left-[620px] top-[16px] w-[920px]">…</div>
+  <div class="absolute right-[64px] top-[20px] w-[256px]">…</div>
+</header>
+```
+
+```html
+<!-- RIGHT — the same design as relationships. -->
+<header class="flex h-[72px] items-center px-16">
+  <div class="shrink-0 basis-[140px]">…</div>       <!-- logo: fixed        -->
+  <div class="min-w-0 flex-1"></div>                 <!-- slack: collapses first -->
+  <div class="mr-[60px] min-w-[180px] shrink basis-[920px]">…</div>  <!-- search -->
+  <div class="shrink-0 basis-[256px]">…</div>        <!-- actions: fixed    -->
+</header>
+```
+
+Measured, both fixtures (`cli/test/fixtures/page/header-*.html`):
+
+| width | fixed px | intent |
+|---|---|---|
+| **1920** | search `620–1540` · actions `1600–1856` | **identical** — the design is reproduced exactly |
+| 1440 | actions overlap the search by **256 px** | clean, the slack collapsed |
+| 1280 | overlap **256 px** + horizontal overflow | clean, the search shrank |
+| 1024 | overlap + overflow | clean |
+
+Pixel-perfect at the design width and robust below it are not in conflict — the second
+version delivers both.
+
+### The conversion table
+
+| XD says | usually means | not |
+|---|---|---|
+| `width: 920` on the widest flexible element | `flex-1` + `max-w-[920px]` | `w-[920px]` |
+| `left: 620` inside a flow container | the result of order + gaps | `absolute left-[620px]` |
+| A large gap that only exists at the design width | slack (a `flex-1` spacer, or `justify-between`) | a fixed `gap` |
+| A small consistent gap | `gap-*` | slack |
+| An element that must never shrink (logo, icon, avatar) | `shrink-0` + `basis-*` | `w-*` alone |
+| Page-edge padding | `px-*` on the container | `left-*` on each child |
+| A repeated series (`tekrar`) | `grid` + `gap`, or flex + `gap` | absolutely positioned copies |
+| A width that fills the remainder | `flex-1` / `minmax(0,1fr)` | a hard-coded number |
+
+**`absolute` is for overlay relationships** — a badge on an avatar, a close button in a
+corner, an icon inside an input. It is not how a row of elements is laid out.
+
+### Verify it — do not eyeball it
+
+```bash
+node "$D2C_ROOT/cli/dist/d2c.mjs" render robust \
+  --olcum "<reportDir>/<section-slug>/olcum.json" --url "<render url>"
+```
+
+One call, five widths (1920 · 1440 · 1366 · 1280 · 1024). It reports overlap, horizontal
+overflow and children escaping their container as **errors**, and text reflow as
+**information** — narrowing is supposed to make text wrap.
+
+Exit code 1 when there is an error. Details in `d2c-code` SKILL.md §4a.
+
 ## Colour
 
 - If a theme token is an **exact** match for the hex, use the token class (`bg-blue-4`).
@@ -69,8 +172,39 @@ Tailwind's exactly, writing it explicitly is harmless — write it.
 - If element **order** changes between the two artboards, do not duplicate the DOM — use
   flex + `order-*`. Two separate DOM trees mean double maintenance and an accessibility
   problem.
-- With only one artboard, do **not invent** responsive behaviour; write the base and leave
-  a TODO.
+
+### Preserving relationships ≠ inventing a design
+
+This distinction matters because getting it wrong caused a real bug. The old rule said
+"with one artboard, do not invent responsive behaviour, leave a TODO" — and that was read
+as "write fixed pixels", which is exactly what breaks on a laptop.
+
+Fixed pixels are not the neutral choice. They are a **claim that the layout never
+adapts**, and that claim is almost always false.
+
+| What | Do you do it? | Why |
+|---|---|---|
+| Keep the design's relationships as the window narrows — the search flexes, the logo does not, the real gap holds | **Yes, without asking** | This is the design's own structure, not a new decision |
+| Change the structure — stack the row, hide elements, a hamburger, change the column count, add a breakpoint | **Ask first** | This is a design decision and it is the designer's to make |
+
+So with a single artboard: build the layout with intent (the first row), and for anything
+in the second row ask the user. Do not silently invent a breakpoint, and do not silently
+write a layout that only works at one width.
+
+**What to ask when there is no responsive artboard:**
+
+> The design only has the <width>px artboard. I built the layout so it keeps its
+> relationships as the window narrows — verified clean at 1920/1440/1366/1280/1024.
+> Below roughly <N>px the row no longer fits and a structural decision is needed
+> (stacking, or a hamburger for the actions). Three options:
+>   1. I add the breakpoint myself with a reasonable default — fastest, but it is a
+>      design decision I would be making.
+>   2. You get the mobile/tablet artboard from the designer and I measure it — most
+>      faithful.
+>   3. We leave it: it stays correct down to <N>px, below that it is out of scope.
+> Which do you prefer?
+
+Never pick option 1 on your own initiative.
 
 ## The className prop
 

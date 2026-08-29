@@ -61,12 +61,31 @@ comments for decoration; mark only what is genuinely missing.
 
 ## 4. Responsive
 
-- Mobile is the base, desktop is `lg:`. With only one artboard, responsive behaviour must
-  **not be invented** — leave a TODO.
+- Mobile is the base, desktop is `lg:`.
+- **Layout comes from relationships, not coordinates.** No `absolute left-*` for elements
+  that sit in a row; exactly one element absorbs the slack; anything that must not shrink
+  gets `shrink-0`. See `tailwind.md` → "Layout intent".
+- **`render robust` must be clean** at 1920/1440/1366/1280/1024: no overlap, no horizontal
+  overflow, nothing escaping its container. Text reflow is fine — that is the layout
+  working.
+- With only one artboard: keep the design's relationships as the window narrows (do this
+  without asking), but do not invent a structural change — stacking, hiding elements or a
+  hamburger is a design decision and gets asked. Fixed pixels are **not** the neutral
+  choice here; they are a claim that the layout never adapts.
 - If the order changes between the two artboards, do not duplicate the DOM — use `order-*`.
 - Prefer padding and content-derived height over fixed heights; use `min-h-*` when you
   must.
-- No horizontal overflow: `document.scrollWidth === innerWidth` (design-diff measures it).
+
+## 4b. Interaction
+
+- If the design shows arrows, dots, chevrons or an active/inactive state, the component is
+  **not static**. Detect the pattern (carousel, tabs, accordion, dropdown, modal,
+  pagination) and build markup that can carry the behaviour: real `<button>`s, `aria-label`,
+  `aria-current` on the active item.
+- If the behaviour is not implemented, leave a TODO and write it in the report — do not
+  ship a static strip as if it were finished.
+- **No dependency is installed without the user's approval.** Use what the project already
+  has; if there is nothing, ask (see SKILL.md §3a4).
 
 ## 5. Token discipline
 

@@ -1,0 +1,23 @@
+<!doctype html><html><head><meta charset="utf-8"><title>header — flex intent</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,sans-serif}
+  /* THE SAME DESIGN, expressed as layout INTENT instead of coordinates.
+     Reading the design's two gaps differently is the whole point:
+       · the 416px gap between logo and search is SLACK  → a flexible spacer
+       · the 60px gap between search and actions is a REAL gap → fixed
+     At 1920 this reproduces the design exactly (spacer resolves to 416); as the window
+     narrows the spacer collapses first, then the search shrinks to its floor. */
+  #header{display:flex;align-items:center;height:72px;padding-inline:64px;background:#0C2380}
+  #logo   {flex:0 0 140px;height:32px;background:#fff}
+  #bosluk {flex:1 1 0;min-width:0}
+  #search {flex:0 1 920px;min-width:180px;height:40px;background:#eef;margin-right:60px}
+  #actions{flex:0 0 256px;height:32px;background:#ffd}
+</style></head><body>
+<header id="header" data-testid="header">
+  <div id="logo"    data-testid="logo"></div>
+  <div id="bosluk"></div>
+  <div id="search"  data-testid="search"></div>
+  <div id="actions" data-testid="actions"></div>
+</header>
+</body></html>

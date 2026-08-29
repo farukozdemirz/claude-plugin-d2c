@@ -158,7 +158,8 @@ Then invoke the `d2c-code` skill (via the Skill tool) and give it the **path to
 (`Y..H`, full width).
 
 `/d2c-code` already does the following internally — do not repeat them:
-3a inventory → 3 code → 4 `design-diff` → 4b `visual-diff` → 4c `/code-review` + regression.
+3a inventory → 3a3 interaction detection → 3 code → 4 `design-diff` →
+**4a `render robust` (five widths)** → 4b `visual-diff` → 4c `/code-review` + regression.
 
 **Do not stop between sections**; if one fails, record it and move to the next, then
 report everything together at the end.

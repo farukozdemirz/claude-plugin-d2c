@@ -110,6 +110,19 @@ Compare against the spec you measured:
   extend it, write **why they are separate** in the report.
 - **New** → carry on.
 
+**Reuse is not only about XD identity.** Before writing any new UI, look for these in the
+project by name and by shape — a second implementation of the same pattern is a cost that
+never goes away:
+
+```
+Header · Navigation · Search · Button · IconButton
+ProductCard · Carousel/Slider · Container · Section · Modal · Tabs
+```
+
+If an existing component can be adapted to the design (a prop, a variant, a `className`),
+adapt it. If you decide to write a new one anyway, say **why the existing one did not
+fit** in the report.
+
 If a token candidate came up, surface it in the report's "suggested tokens" section.
 
 ### 3a2. Export the assets (icons + images)
@@ -124,6 +137,56 @@ node "$D2C_ROOT/cli/dist/d2c.mjs" xd assets "<xd link>" --screen "<screen>" \
 
 You get real SVG and real image files — no need for placeholders or approximate icons.
 Leave a `{/* TODO */}` for every item in the `atlananlar` list.
+
+### 3a3. Is this component interactive?
+
+**Do not copy only the static appearance.** A design cannot show behaviour, but it leaves
+visual evidence of it. Read that evidence before writing the markup — retrofitting
+interaction later usually means rewriting the DOM.
+
+| What you see in the design | What it almost certainly is |
+|---|---|
+| Left/right arrows · dots, one of them active · repeated cards that run past the edge | **carousel / slider** |
+| Dots alone, no arrows | carousel, or **pagination** |
+| A row of labels with one underlined/filled | **tabs** |
+| A repeated row with a chevron on the right | **accordion** |
+| A field with a chevron, or a list floating over the page | **dropdown / select** |
+| A panel with a dimmed backdrop behind it, or a close ✕ in a corner | **modal / drawer** |
+| "See all", "Show more" next to truncated content | **expandable** |
+
+Two real examples from one screen: the hero carried `‹ ● ○ ○ ›` — arrows plus three dots
+with the first one active. Below it "Featured Categories" carried `● ○ ○ ○`. Both were
+originally generated as static markup; both are carousels.
+
+**What to do with a finding:**
+
+- Build the markup so the behaviour can exist: a track element, items as siblings,
+  the dots/arrows as real `<button>`s with `aria-label`, `aria-current` on the active dot.
+- If you implement the behaviour, do it **as §3a4 requires**.
+- If you do not, leave `{/* TODO: carousel behaviour — the design shows arrows + dots */}`
+  and write it in the report. Do not silently ship a static strip as if it were finished.
+- The design shows only the **default state**. Hover, focus, open/closed and transitions
+  are not in it — do not invent them, note them.
+
+### 3a4. A slider was detected — check the project first
+
+**Do not install a dependency on your own initiative.** In order:
+
+1. **Is there a carousel package in the project?** Look at `package.json` for
+   `swiper`, `embla-carousel-react`, `keen-slider`, `splide`, `react-slick`,
+   `@radix-ui/*`, or whatever is already there. **Use what is already installed.**
+2. **Is there a shared component?** `d2c inventory` (§3a) lists them — a `Carousel`,
+   `Slider` or `Swiper` component in the project is reused, not rewritten.
+3. **Neither exists?** Then **ask, do not install**:
+
+   > The design shows a slider/carousel (arrows + dots), but the project has no usable
+   > slider package or component. Shall I install `<suggested-package>`? Alternatively I
+   > can leave the markup static with a TODO.
+
+   Wait for the answer. Adding a dependency is the user's decision, not yours.
+4. **A simple case may not need a library at all** — a horizontally scrolling strip with
+   `overflow-x-auto` + `scroll-snap` covers many designs with no dependency. Suggest this
+   when it fits.
 
 ### 3. Generate the code
 
@@ -230,6 +293,56 @@ Every agent round is ~2-4 min.
   **No hiding, no loosening tolerances, no changing target values.**
 - A `⚠ font eksik` note is not a failure — carry it into the report as a warning.
 
+### 4a. Verify responsive robustness — MANDATORY
+
+Passing at the design's own width proves the geometry, **not the layout**. The measured
+failure this step exists for: a header that was pixel-perfect at 1920 put the Search
+button on top of the input and collapsed `Login / Wishlist / Cart` into each other on a
+laptop.
+
+**One command, five widths:**
+
+```bash
+node "$D2C_ROOT/cli/dist/d2c.mjs" render robust \
+  --olcum "<reportDir>/<section-slug>/olcum.json" --url "<render url>" \
+  --json -o "<reportDir>/<section-slug>/robust.json"
+```
+
+Default widths: **1920 · 1440 · 1366 · 1280 · 1024**. Override with
+`--widths 1440,1280`. Exit code 1 when there is an error. About 1.5 s.
+
+The two viewports serve different purposes and must not be conflated:
+
+| Viewport | What it proves | Which command |
+|---|---|---|
+| The design's own width | pixel-perfect parity | `render verify` |
+| The other widths | layout robustness | `render robust` |
+
+**What counts as an error, and what does not:**
+
+| Finding | Level | Why |
+|---|---|---|
+| Two siblings overlap | **hata** | Never intended |
+| The page scrolls horizontally | **hata** | Never intended |
+| A child escapes its container | **hata** | Never intended |
+| Text got taller (reflowed) | `bilgi` | Narrowing is *supposed* to wrap text |
+
+Reflow is not a defect. If it were reported as one, every narrow viewport would look
+broken and this check would stop being read.
+
+**When there is an error, the cause is nearly always fixed-pixel positioning.** Go to
+`references/tailwind.md` → "Layout intent": which element absorbs the slack, which gap is
+real, which element must not shrink.
+
+**Do not fix an error by inventing a new design.** The goal is for the design's
+relationships to survive a narrowing window — not for you to redesign the section. If the
+layout genuinely cannot fit below some width, that is a structural decision: ask the user
+(the question is written out in `tailwind.md` → "Preserving relationships ≠ inventing a
+design").
+
+Errors that do not close are written into `code.md` as **"çözülemedi"** with the width and
+the reason. No hiding.
+
 ### 4b. Verify visually
 
 The numeric table verifies the boxes, **not what is inside them.** Verified: all three
@@ -318,6 +431,10 @@ Findings that were not applied are written into the report with a rationale.
 - Tokens used / arbitrary values
 - **Tokens suggested for the config** (Tailwind v4: the `@theme` block inside
   `app/globals.css`) — suggest them, do not add them yourself
+- **Responsive robustness** — the `render robust` result per width; any error that could
+  not be closed, with its width and reason
+- **Interactive components** — what was detected (carousel, tabs, …), whether the
+  behaviour was implemented, and if not, why
 - **Visual diff result** — differences requiring action, and why any could not be closed
 - **Review result** — findings applied / not applied
 - TODOs (images that could not be downloaded, missing fonts, responsive behaviour unknown

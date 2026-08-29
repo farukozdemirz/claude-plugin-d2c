@@ -45,10 +45,29 @@ skipped silently — `d2c xd assets` reports them in `atlananlar[]` with a reaso
 
 ## What it does not read
 
-- **Interaction and state.** **⏳ Solvable in M4** — `interactions.json` is reachable from
-  the CDN (trigger, action, duration, easing). Right now it is **not read at all.** Hover
-  states, drawer opening animations, the open state of a toggle, and form submission are
-  not generated. The components are the purely visual equivalent of the Default State.
+- **Interaction and state.** 🔸 **PARTLY SOLVED (1.14.0)** — the tool now **detects** the
+  pattern from visual evidence (arrows + dots → carousel; chevron → accordion; a row of
+  labels with one active → tabs) and builds markup that can carry the behaviour. What it
+  still does not do is read `interactions.json` (trigger, action, duration, easing), which
+  is reachable from the CDN. So durations, easing and the exact transitions are still not
+  generated, and hover/pressed states are still absent — the design only shows the Default
+  State. Detection is written into `d2c-code` SKILL.md §3a3; **no dependency is installed
+  without the user's approval** (§3a4).
+
+- ~~**Fixed-pixel layout breaks below the design's width.**~~ **✅ SOLVED (1.14.0)** — the
+  measured failure: a header from a 1920 design, written out as absolute pixels, was
+  pixel-perfect at 1920 and put the Search button on top of the input on a laptop.
+  Two things changed: `tailwind.md` gained a "Layout intent" section (coordinates ≠ CSS
+  positioning; slack gap vs real gap; which element absorbs the remainder), and
+  `d2c render robust` now measures **five widths in one call** (1920/1440/1366/1280/1024),
+  reporting overlap, horizontal overflow and container escapes as errors while treating
+  text reflow as information.
+  Verified on a fixture pair: at 1920 both versions reproduce the design exactly
+  (`search 620–1540`); at 1440-1024 the fixed-pixel one overlaps by 256 px while the
+  intent-based one stays clean.
+  *Still a limit:* the tool preserves the design's relationships but will not invent a
+  **structural** change (stacking, a hamburger). With a single artboard that decision is
+  put to the user.
 - **Breakpoints.** XD does not provide breakpoint information. *(unchanged)* When the
   artboards are 375 and 1440, `lg: = 1024px` is **assumed**. Confirm with the designer.
 - **Horizontal segmentation.** Screen segmentation works vertically; columns inside a

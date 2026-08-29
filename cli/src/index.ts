@@ -30,6 +30,10 @@ export * from './visual/pixel.js';
 export * from './inventory/scan.js';
 export * from './source/adobe-xd/smoke.js';
 export * from './util/trace.js';
+export * from './verify/robust.js';
+export {
+  RobustSchema, ROBUST_SCHEMA_VERSION, BulguSchema as RobustBulguSchema,
+} from './contracts/robust.js';
 export * from './visual/run.js';
 export * from './source/adobe-xd/share.js';
 export * from './source/adobe-xd/cdn.js';

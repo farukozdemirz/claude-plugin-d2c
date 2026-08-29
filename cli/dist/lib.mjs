@@ -23161,6 +23161,201 @@ function smokeYaz(s) {
   return satirlar.join("\n") + "\n";
 }
 
+// src/contracts/robust.ts
+var ROBUST_SCHEMA_VERSION = 1;
+var SeviyeSchema = external_exports.enum(["hata", "uyari", "bilgi"]);
+var BulguSchema = external_exports.object({
+  seviye: SeviyeSchema,
+  /**
+   * `cakisma`            — two siblings overlap
+   * `yatay-tasma`        — the page scrolls horizontally
+   * `kapsayici-tasmasi`  — a child escapes its container
+   * `sarma`              — an element got taller (text reflowed) · expected
+   */
+  tur: external_exports.enum(["cakisma", "yatay-tasma", "kapsayici-tasmasi", "sarma"]),
+  genislik: external_exports.number(),
+  elemanlar: external_exports.array(external_exports.string()),
+  miktarPx: external_exports.number().nullable(),
+  detay: external_exports.string()
+});
+var GenislikSonucSchema = external_exports.object({
+  genislik: external_exports.number(),
+  dogrulandi: external_exports.boolean(),
+  /** Was measurement skipped? If the viewport could not be verified, we do not measure. */
+  atlandi: external_exports.string().nullable(),
+  bulgular: external_exports.array(BulguSchema)
+});
+var RobustSchema = external_exports.object({
+  schemaVersion: external_exports.literal(ROBUST_SCHEMA_VERSION),
+  tarih: external_exports.string(),
+  url: external_exports.string(),
+  /** The design's own width — the pixel-perfect anchor, not a robustness check. */
+  referansGenislik: external_exports.number().nullable(),
+  genislikler: external_exports.array(GenislikSonucSchema),
+  ozet: external_exports.object({ hata: external_exports.number(), uyari: external_exports.number(), bilgi: external_exports.number() }),
+  sureMs: external_exports.number()
+});
+
+// src/verify/robust.ts
+var VARSAYILAN_GENISLIKLER = [1920, 1440, 1366, 1280, 1024];
+var CAKISMA_ESIGI_PX = 2;
+var TASMA_ESIGI_PX = 1;
+async function sayfayiOlc2(page, testidler) {
+  return page.evaluate((ids) => {
+    const q = (id) => document.querySelector(`[data-testid="${id}"]`);
+    const elemanlar = ids.map((testid) => {
+      const el = q(testid);
+      if (!el) {
+        return { testid, bulundu: false, x: 0, y: 0, w: 0, h: 0, ebeveyn: null, gorunur: false };
+      }
+      const r = el.getBoundingClientRect();
+      let p = el.parentElement;
+      let ebeveyn = null;
+      while (p) {
+        const t = p.getAttribute?.("data-testid");
+        if (t && ids.includes(t)) {
+          ebeveyn = t;
+          break;
+        }
+        p = p.parentElement;
+      }
+      const st = getComputedStyle(el);
+      return {
+        testid,
+        bulundu: true,
+        x: +r.x.toFixed(2),
+        y: +r.y.toFixed(2),
+        w: +r.width.toFixed(2),
+        h: +r.height.toFixed(2),
+        ebeveyn,
+        gorunur: st.display !== "none" && st.visibility !== "hidden" && r.width > 0 && r.height > 0
+      };
+    });
+    return {
+      elemanlar,
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth
+    };
+  }, testidler);
+}
+function kesisim(a, b) {
+  const w = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+  const h = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+  return { w: w > 0 ? w : 0, h: h > 0 ? h : 0 };
+}
+function bulgulariCikar(o, genislik, referans) {
+  const bulgular = [];
+  const gorunur = o.elemanlar.filter((e) => e.bulundu && e.gorunur);
+  if (o.scrollWidth > o.clientWidth + TASMA_ESIGI_PX) {
+    bulgular.push({
+      seviye: "hata",
+      tur: "yatay-tasma",
+      genislik,
+      elemanlar: [],
+      miktarPx: +(o.scrollWidth - o.clientWidth).toFixed(2),
+      detay: `page scrolls horizontally: scrollWidth ${o.scrollWidth} > clientWidth ${o.clientWidth}`
+    });
+  }
+  for (let i = 0; i < gorunur.length; i++) {
+    for (let j = i + 1; j < gorunur.length; j++) {
+      const a = gorunur[i], b = gorunur[j];
+      if (a.ebeveyn !== b.ebeveyn) continue;
+      const k = kesisim(a, b);
+      if (k.w > CAKISMA_ESIGI_PX && k.h > CAKISMA_ESIGI_PX) {
+        bulgular.push({
+          seviye: "hata",
+          tur: "cakisma",
+          genislik,
+          elemanlar: [a.testid, b.testid],
+          miktarPx: +k.w.toFixed(2),
+          detay: `"${a.testid}" and "${b.testid}" overlap by ${k.w.toFixed(0)}\xD7${k.h.toFixed(0)} px`
+        });
+      }
+    }
+  }
+  for (const e of gorunur) {
+    if (!e.ebeveyn) continue;
+    const p = gorunur.find((x) => x.testid === e.ebeveyn);
+    if (!p) continue;
+    const sag = e.x + e.w - (p.x + p.w);
+    const sol = p.x - e.x;
+    const tasma = Math.max(sag, sol);
+    if (tasma > TASMA_ESIGI_PX) {
+      bulgular.push({
+        seviye: "hata",
+        tur: "kapsayici-tasmasi",
+        genislik,
+        elemanlar: [e.testid, p.testid],
+        miktarPx: +tasma.toFixed(2),
+        detay: `"${e.testid}" escapes its container "${p.testid}" by ${tasma.toFixed(0)} px`
+      });
+    }
+  }
+  if (referans) {
+    for (const e of gorunur) {
+      const r = referans.elemanlar.find((x) => x.testid === e.testid);
+      if (!r || !r.bulundu) continue;
+      if (e.h > r.h + 1) {
+        bulgular.push({
+          seviye: "bilgi",
+          tur: "sarma",
+          genislik,
+          elemanlar: [e.testid],
+          miktarPx: +(e.h - r.h).toFixed(2),
+          detay: `"${e.testid}" is ${(e.h - r.h).toFixed(0)} px taller than at the reference width (text reflowed)`
+        });
+      }
+    }
+  }
+  return bulgular;
+}
+async function robustDogrula(sec) {
+  const t02 = Date.now();
+  const genislikler = sec.genislikler?.length ? sec.genislikler : VARSAYILAN_GENISLIKLER;
+  const ref = sec.referansGenislik ?? null;
+  const sira = ref && !genislikler.includes(ref) ? [ref, ...genislikler] : [...genislikler];
+  if (ref) sira.sort((a, b) => a === ref ? -1 : b === ref ? 1 : b - a);
+  const oturum = await tarayiciAc({ cdp: sec.cdp, headed: sec.headed });
+  const sonuclar = [];
+  let referansOlcum = null;
+  try {
+    await olc("sayfa-yukleme", () => oturum.page.goto(sec.url, { waitUntil: "networkidle" }));
+    for (const g of sira) {
+      const v = await viewportAyarla(oturum.page, g);
+      if (!v.dogrulandi) {
+        sonuclar.push({ genislik: g, dogrulandi: false, atlandi: viewportHatasi(v), bulgular: [] });
+        continue;
+      }
+      await oturum.page.waitForTimeout(80);
+      const o = await olc("olcum", () => sayfayiOlc2(oturum.page, sec.testidler));
+      if (ref && g === ref) referansOlcum = o;
+      sonuclar.push({
+        genislik: g,
+        dogrulandi: true,
+        atlandi: null,
+        bulgular: bulgulariCikar(o, g, g === ref ? null : referansOlcum)
+      });
+    }
+  } finally {
+    await oturum.kapat();
+  }
+  const hepsi = sonuclar.flatMap((s) => s.bulgular);
+  const sonuc = {
+    schemaVersion: ROBUST_SCHEMA_VERSION,
+    tarih: (/* @__PURE__ */ new Date()).toISOString(),
+    url: sec.url,
+    referansGenislik: ref,
+    genislikler: sonuclar,
+    ozet: {
+      hata: hepsi.filter((b) => b.seviye === "hata").length,
+      uyari: hepsi.filter((b) => b.seviye === "uyari").length,
+      bilgi: hepsi.filter((b) => b.seviye === "bilgi").length
+    },
+    sureMs: Date.now() - t02
+  };
+  return RobustSchema.parse(sonuc);
+}
+
 // src/visual/run.ts
 import { mkdirSync as mkdirSync3, writeFileSync as writeFileSync3 } from "node:fs";
 import { join as join4 } from "node:path";
@@ -23634,11 +23829,15 @@ export {
   KonturSchema2 as OlcumKonturSchema,
   OlcumSchema,
   PARITE_ESIGI,
+  ROBUST_SCHEMA_VERSION,
+  BulguSchema as RobustBulguSchema,
+  RobustSchema,
   SCHEMA_VERSION,
   SECTIONS_SCHEMA_VERSION,
   SectionMapSchema,
   TOLERANS_PX,
   TekrarSchema,
+  VARSAYILAN_GENISLIKLER,
   VERIFICATION_SCHEMA_VERSION,
   VISUAL_SCHEMA_VERSION,
   VerificationSchema,
@@ -23653,6 +23852,7 @@ export {
   baslikBul,
   bosImg,
   bosluklariBul,
+  bulgulariCikar,
   checkAgc,
   checkPrototype,
   componentUrl,
@@ -23715,6 +23915,7 @@ export {
   referansIndir,
   renderYakala,
   rgbToHex,
+  robustDogrula,
   sayfayiOlc,
   segment,
   sliceAssignment,

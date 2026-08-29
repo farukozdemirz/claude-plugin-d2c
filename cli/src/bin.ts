@@ -14,6 +14,7 @@ import { gorselDiff } from './visual/run.js';
 import { envanterCikar, envanterYaz } from './inventory/scan.js';
 import { izlemeBaslat, izlemeJson, olc, rapor } from './util/trace.js';
 import { xdSmoke, smokeYaz } from './source/adobe-xd/smoke.js';
+import { robustDogrula, VARSAYILAN_GENISLIKLER } from './verify/robust.js';
 import { fetchShare } from './source/adobe-xd/share.js';
 import { fetchComponentJson, CONTENT_TYPES } from './source/adobe-xd/cdn.js';
 import { flatten } from './source/adobe-xd/agc.js';
@@ -35,6 +36,9 @@ KOMUTLAR
                                   bölüm haritası (probe/screenshot YOK)
   render verify --olcum <dosya> --url <url> [--viewport desktop|mobil] [-o <dosya>]
                                   render'ı ölç ve olcum.json hedefleriyle karşılaştır
+  render robust --olcum <dosya> --url <url> [--widths 1920,1440,1280] [-o <dosya>]
+                                  ÇOKLU genişlikte layout sağlamlığı: çakışma · taşma ·
+                                  kapsayıcı dışına çıkma (tek çağrı, varsayılan 5 genişlik)
   visual diff --olcum <dosya> --xd-url <url> --screen <ad> --url <render url>
               --testid <id> --out-dir <dizin> [--kalibre "HEX:x,y,w,h"]
                                   referans + render + piksel karşılaştırma + hazır kırpmalar
@@ -82,6 +86,7 @@ interface Args {
   section?: string; outDir?: string; force?: boolean; kutu?: string; ad?: string;
   olcum?: string; url?: string; cdp?: string; headed?: boolean; tur?: number;
   xdUrl?: string; testid?: string; kalibre?: string; motor?: 'ts' | 'python';
+  widths?: number[];
   verbose?: boolean; trace?: string;
 }
 
@@ -120,6 +125,10 @@ function parseArgs(argv: string[]): Args {
       const v = argv[++i];
       if (v !== 'ts' && v !== 'python') throw new Error(`--motor ts|python olmalı: ${v}`);
       a.motor = v;
+    }
+    else if (k === '--widths') {
+      a.widths = String(argv[++i] ?? '').split(',').map((v) => Number(v.trim())).filter((v) => v > 0);
+      if (!a.widths.length) throw new Error('--widths: virgülle ayrılmış pozitif sayı bekleniyor');
     }
     else if (k === '--kalibre') a.kalibre = argv[++i];
     else if (k.startsWith('-')) throw new Error(`bilinmeyen seçenek: ${k}`);
@@ -427,6 +436,44 @@ async function cmdVisualDiff(args: Args): Promise<number> {
   return 0;
 }
 
+async function cmdRenderRobust(args: Args): Promise<number> {
+  const eksik = (['olcum', 'url'] as const).filter((k) => !args[k]);
+  if (eksik.length) { console.error(`HATA: eksik: --${eksik.join(' --')}\n\n` + HELP); return 2; }
+  const olcum = OlcumSchema.parse(JSON.parse(readFileSync(args.olcum!, 'utf8')));
+  const testidler = [...new Set(olcum.elemanlar.map((e) => e.testid).filter((t): t is string => !!t))];
+  if (!testidler.length) {
+    console.error('HATA: olcum.json\'da testid yok — kod fazı eşlemeyi doldurmalı (d2c-code §3).');
+    return 2;
+  }
+  // The design's own width is the reference: there the job is pixel-perfect parity,
+  // the other widths are where robustness is judged.
+  const ref = olcum.bolum.desktop?.[2] ?? null;
+  const r = await robustDogrula({
+    url: args.url!, testidler, referansGenislik: ref,
+    genislikler: args.widths, cdp: args.cdp, headed: args.headed,
+  });
+  emit(args, r, () => {
+    console.log(`# layout sağlamlığı  (${(r.sureMs / 1000).toFixed(1)} sn)`);
+    console.log(`  ${testidler.length} eleman · ${r.genislikler.length} genişlik` +
+      (ref ? ` · referans ${ref}px` : ''));
+    console.log(`  ✗ ${r.ozet.hata} hata · ⚠ ${r.ozet.uyari} uyarı · ℹ ${r.ozet.bilgi} bilgi\n`);
+    for (const g of r.genislikler) {
+      if (g.atlandi) { console.log(`  ${g.genislik}px — ÖLÇÜLMEDİ: ${g.atlandi.split('\n')[0]}`); continue; }
+      const h = g.bulgular.filter((b) => b.seviye === 'hata');
+      const isaret = g.genislik === ref ? ' (referans)' : '';
+      console.log(`  ${String(g.genislik).padStart(5)}px${isaret}  ${h.length ? `✗ ${h.length}` : '✓ temiz'}`);
+      for (const b of h) console.log(`         ${b.detay}`);
+    }
+    if (r.ozet.hata === 0) {
+      console.log('\n  Layout daralan genişliklerde tasarım ilişkilerini koruyor.');
+    } else {
+      console.log('\n  Sabit piksel konumlandırma en sık sebep — bkz. tailwind.md "Layout intent".');
+    }
+  });
+  // Errors must break the caller: a header that overlaps is not a passing result.
+  return r.ozet.hata ? 1 : 0;
+}
+
 async function cmdSmoke(args: Args): Promise<number> {
   const url = args._[2];
   if (!url) { console.error('HATA: XD linki gerekli\n\n' + HELP); return 2; }
@@ -519,6 +566,7 @@ async function main(): Promise<void> {
     else if (a === 'sections') code = await cmdSections(args);
     else if (a === 'spec') code = await cmdSpec(args);
     else if (a === 'render' && b === 'verify') code = await cmdRenderVerify(args);
+    else if (a === 'render' && b === 'robust') code = await cmdRenderRobust(args);
     else if (a === 'font' && b === 'parity') code = await cmdFontParity(args);
     else if (a === 'visual' && b === 'diff') code = await cmdVisualDiff(args);
     else { console.error(`HATA: bilinmeyen komut: ${args._.join(' ')}\n\n${HELP}`); code = 2; }

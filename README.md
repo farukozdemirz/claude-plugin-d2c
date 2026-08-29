@@ -18,6 +18,7 @@ design.
         ├─ component inventory ("does it already exist?")
         ├─ generate Tailwind + React
         ├─ render verify → verification.json      (Playwright, ~1.3 s)
+        ├─ render robust → robust.json            (5 widths, ~1.5 s)
         ├─ visual diff   → visual.json + ready-made crops (~2.7 s)
         ├─ /code-review  → quality bar
         └─ regression                             → code.md + runs.jsonl
@@ -45,6 +46,7 @@ The CLI underneath the skills can also be used directly
 | `xd inspect <link>` | screen list + contract health |
 | `xd smoke <link>` | live contract check — exit code 1 when it breaks (weekly CI) |
 | `inventory [dir]` | current component inventory (AST) — "does this already exist?" |
+| `render robust --olcum … --url …` | layout robustness at 5 widths — overlap · overflow · container escapes |
 
 Every command accepts `--verbose` (duration summary) and `--trace <file>` (JSON).
 
