@@ -1,15 +1,15 @@
 /**
- * XD paylaşım linkinin shell HTML'ini okur ve `window.prototypeData`'yı çıkarır.
+ * Reads the shell HTML of an XD share link and extracts `window.prototypeData`.
  *
- * GÜVENLİK — ana plan Kural 1: uzak JS HİÇBİR koşulda çalıştırılmaz.
- * `window.prototypeData = {...}` bir JS ataması ve onu okumanın kolay yolu `eval`.
- * Yasak: uzak sunucudan gelen bir dizgiyi çalıştırmak, geliştirme ortamında keyfi
- * kod çalıştırmaktır. Bunun yerine atamanın sağ tarafı süslü parantez eşlemesiyle
- * kesilir ve YALNIZ `JSON.parse` ile ayrıştırılır.
+ * SECURITY — the main plan's Rule 1: remote JS is NEVER executed, under any condition.
+ * `window.prototypeData = {...}` is a JS assignment and the easy way to read it is
+ * `eval`. That is forbidden: executing a string from a remote server means running
+ * arbitrary code in a development environment. Instead the right-hand side of the
+ * assignment is sliced by brace matching and parsed with `JSON.parse` ONLY.
  *
- * Bu yolun çalıştığı POC-1'de doğrulandı: manifest tam olarak böyle ayrıştırıldı.
- * `JSON.parse` başarısız olursa sözleşme değişmiş demektir — teşhisle durulur,
- * asla çalıştırmaya düşülmez.
+ * That this works was verified in POC-1: the manifest was parsed exactly this way.
+ * If `JSON.parse` fails, the contract has changed — we stop with a diagnosis, and never
+ * fall back to executing anything.
  */
 import { redactedError } from '../../util/redact.js';
 import { olc } from '../../util/trace.js';
@@ -43,21 +43,21 @@ export interface PrototypeData {
 }
 
 /**
- * `window.<isim> = <JSON>` atamasının sağ tarafını süslü parantez eşlemesiyle keser.
+ * Slices the right-hand side of a `window.<name> = <JSON>` assignment by brace matching.
  *
- * String literal'lerin içindeki `{`/`}` ve kaçışlı tırnaklar dikkate alınır —
- * yoksa metin içinde geçen bir süslü parantez eşlemeyi bozardı.
+ * `{`/`}` inside string literals and escaped quotes are accounted for — otherwise a
+ * brace occurring inside text would break the matching.
  *
- * Atamanın sağı bir nesne/dizi DEĞİLSE `null` döner. Bu önemli: Adobe geçersiz
- * linke **HTTP 200 + `window.prototypeData = null`** dönüyor. Bu kontrol olmadan
- * tarayıcı sonraki bir `{`'ye atlayıp alakasız bir blok keser ve kullanıcının link
- * yazım hatası "Adobe sözleşmeyi değiştirdi" diye raporlanır.
+ * Returns `null` when the right-hand side is NOT an object/array. This matters: Adobe
+ * answers an invalid link with **HTTP 200 + `window.prototypeData = null`**. Without
+ * this check the parser would jump to the next `{`, slice an unrelated block, and the
+ * user's typo would be reported as "Adobe changed the contract".
  */
 export function sliceAssignment(html: string, varName: string): string | null {
   const m = new RegExp(`window\\.${varName}\\s*=\\s*`).exec(html);
   if (!m) return null;
   const start = m.index + m[0].length;
-  // Sağ taraf nesne/dizi ile başlamıyorsa (null, undefined, sayı…) veri yok demektir.
+  // If the right-hand side does not start with an object/array (null, undefined, a number…) there is no data.
   const ilk = html.slice(start, start + 32).trimStart()[0];
   if (ilk !== '{' && ilk !== '[') return null;
   let depth = 0;
@@ -80,11 +80,11 @@ export function sliceAssignment(html: string, varName: string): string | null {
   return null;
 }
 
-/** Shell HTML'inden `prototypeData`'yı ayrıştırır. eval YOK. */
+/** Parses `prototypeData` out of the shell HTML. NO eval. */
 export function parsePrototypeData(html: string): PrototypeData {
   const raw = sliceAssignment(html, 'prototypeData');
   if (!raw) {
-    // İki ayrı durumu ayır — teşhis kullanıcıyı doğru yere göndermeli.
+    // Separate the two cases — the diagnosis has to send the user to the right place.
     if (/window\.prototypeData\s*=\s*null/.test(html)) {
       throw redactedError(
         'XD linki geçersiz veya erişilemiyor (sunucu boş veri döndürdü).\n' +
@@ -102,7 +102,7 @@ export function parsePrototypeData(html: string): PrototypeData {
   try {
     data = JSON.parse(raw);
   } catch (e) {
-    // Çalıştırmaya DÜŞÜLMEZ — teşhisle durulur.
+    // We do NOT fall back to executing — we stop with a diagnosis.
     throw redactedError(
       `window.prototypeData JSON olarak ayrıştırılamadı (${(e as Error).message}).\n` +
         '  Sözleşme değişmiş olabilir. eval kullanılmaz; elle inceleyin.'
@@ -122,17 +122,17 @@ export function parsePrototypeData(html: string): PrototypeData {
 }
 
 /**
- * Paylaşım URL'ini normalize eder.
+ * Normalises the share URL.
  *
- * XD'nin birden çok link biçimi var ve hepsine körlemesine `/specs/` eklemek
- * YANLIŞ. Ölçüldü: `https://xd.adobe.com/spec/<id>/grid/` canlı ve 200 dönüyor,
- * ama sonuna `/specs/` eklenince 404 oluyor — araç da "link geçersiz veya
- * yayından kaldırılmış" diyip KULLANICIYI suçluyordu. Hata linkte değil,
- * bizim ürettiğimiz adresteydi.
+ * XD has more than one link form, and blindly appending `/specs/` to all of them is
+ * WRONG. Measured: `https://xd.adobe.com/spec/<id>/grid/` is live and returns 200, but
+ * appending `/specs/` makes it 404 — and the tool then blamed THE USER with "the link
+ * is invalid or has been withdrawn". The error was not in the link, it was in the
+ * address we produced.
  *
- * Kural: yalnız `/view/<id>...` biçimi `/view/<id>/specs/`'e indirgenir
- * (derin prototip linkleri — `/view/<id>/screen/<sid>/` — dahil).
- * Diğer biçimler OLDUĞU GİBİ denenir.
+ * The rule: only the `/view/<id>...` form is reduced to `/view/<id>/specs/`
+ * (including deep prototype links — `/view/<id>/screen/<sid>/`).
+ * Other forms are tried AS GIVEN.
  */
 export function normalizeShareUrl(url: string): string {
   const u = url.trim().replace(/\s+$/, '');
@@ -141,7 +141,7 @@ export function normalizeShareUrl(url: string): string {
   return u.endsWith('/') ? u : u + '/';
 }
 
-/** Shell HTML'ini çeker. Token ASLA saklanmaz — her koşuda taze alınır. */
+/** Fetches the shell HTML. The token is NEVER stored — it is fetched fresh on every run. */
 export async function fetchShare(url: string, timeoutMs = 60_000): Promise<PrototypeData> {
   const target = normalizeShareUrl(url);
   const ctrl = new AbortController();
@@ -155,7 +155,7 @@ export async function fetchShare(url: string, timeoutMs = 60_000): Promise<Proto
     clearTimeout(timer);
   }
   if (!res.ok) {
-    // Adresi biz değiştirdiysek bunu SÖYLE — yoksa suç linke atılır.
+    // If we changed the address, SAY SO — otherwise the link gets the blame.
     const degistirildi = target !== url.trim();
     throw redactedError(
       `XD linki ${res.status} döndü — link geçersiz veya yayından kaldırılmış.` +

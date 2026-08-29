@@ -1,4 +1,4 @@
-/** Renk dönüşümleri. Karşılaştırma her zaman BÜYÜK HARF hex üzerinden yapılır. */
+/** Colour conversions. Comparison is always done on UPPERCASE hex. */
 
 export interface Rgb { r: number; g: number; b: number }
 
@@ -9,8 +9,8 @@ export function rgbToHex(c: Rgb): string {
 }
 
 /**
- * AGC metin stillerinde renk ARGB tamsayısı olarak geliyor
- * (ör. 4278985600 = 0xFF0C2380). Alfa yok sayılır — CSS rengi ayrı taşınır.
+ * In AGC text styles the colour arrives as an ARGB integer
+ * (e.g. 4278985600 = 0xFF0C2380). Alpha is ignored — the CSS colour is carried separately.
  */
 export function argbToHex(v: number): string {
   const rgb = v & 0xffffff;

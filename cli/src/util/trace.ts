@@ -1,19 +1,20 @@
 /**
- * Faz süresi ölçümü.
+ * Phase duration measurement.
  *
- * Neden gerek var: Faz 0'da temel, transcript'ten geriye dönük çıkarıldı çünkü
- * araç süreyi fazlara bölmüyordu. "Yavaş" demek kolay, **hangi adımın** yavaş
- * olduğunu söylemek ölçüm ister. Bu modül onu veriyor.
+ * Why this is needed: in Phase 0 the baseline had to be reconstructed retrospectively
+ * from transcripts because the tool did not break time down by phase. Saying "it is
+ * slow" is easy; saying **which step** is slow takes measurement. This module provides
+ * that.
  *
- * Varsayılan sessiz: `--verbose` insan okunur özet (stderr), `--trace` JSON.
- * stderr seçildi çünkü `--json` çıktısı stdout'ta ve makine tarafından okunuyor —
- * izleme oraya karışmamalı.
+ * Silent by default: `--verbose` prints a human-readable summary (to stderr), `--trace`
+ * writes JSON. stderr was chosen because `--json` output goes to stdout and is read by
+ * machines — the trace must not contaminate it.
  */
 
 export interface Faz {
   ad: string;
   ms: number;
-  /** İç içe ölçüm derinliği. 0 = üst seviye. */
+  /** Nesting depth of the measurement. 0 = top level. */
   derinlik: number;
 }
 
@@ -22,7 +23,7 @@ let t0 = 0;
 let acik = false;
 let derinlik = 0;
 
-/** Ölçümü başlatır. Komut başında bir kez çağrılır. */
+/** Starts the measurement. Called once at the beginning of a command. */
 export function izlemeBaslat(): void {
   kayitlar = [];
   t0 = performance.now();
@@ -30,7 +31,7 @@ export function izlemeBaslat(): void {
   acik = true;
 }
 
-/** Bir fazı ölç. Kapalıyken de çalışır — yalnız kayıt tutmaz. */
+/** Measure one phase. Works while disabled too — it just does not record. */
 export async function olc<T>(ad: string, f: () => Promise<T> | T): Promise<T> {
   if (!acik) return await f();
   const b = performance.now();
@@ -39,13 +40,13 @@ export async function olc<T>(ad: string, f: () => Promise<T> | T): Promise<T> {
     return await f();
   } finally {
     derinlik--;
-    // Süre KAPSAYICI: `cikarma` içinde `xd-shell` de var. Derinlik olmadan ikisi
-    // toplanır ve toplam süreyi aşar — raporlar bunu bilerek hesaplıyor.
+    // The duration is INCLUSIVE: `cikarma` also contains `xd-shell`. Without depth the
+    // two would be summed and exceed the total — the reports account for this.
     kayitlar.push({ ad, ms: +(performance.now() - b).toFixed(1), derinlik: d });
   }
 }
 
-/** Dışarıdan ölçülmüş bir süreyi kaydet (zaten `Date.now()` ile ölçülen yerler için). */
+/** Record a duration measured elsewhere (for places already timed with `Date.now()`). */
 export function fazEkle(ad: string, ms: number): void {
   if (acik) kayitlar.push({ ad, ms: +ms.toFixed(1), derinlik: 0 });
 }
@@ -59,31 +60,31 @@ export function toplamMs(): number {
 }
 
 /**
- * `runs.jsonl`'a giden biçim: faz adı → saniye.
- * Ana plan "çıkarma/doğrulama/görsel süreleri **ayrı ayrı**" istiyor.
+ * The shape that goes into `runs.jsonl`: phase name → seconds.
+ * The main plan asks for "extraction/verification/visual durations **separately**".
  */
 export function fazSn(): Record<string, number> {
   const out: Record<string, number> = {};
   for (const f of kayitlar) {
-    // Aynı ad birden çok kez ölçülebilir (ör. iki artboard) — toplanır.
+    // The same name can be measured more than once (e.g. two artboards) — they are summed.
     out[f.ad] = +(((out[f.ad] ?? 0) * 1000 + f.ms) / 1000).toFixed(2);
   }
   out.toplam = +(toplamMs() / 1000).toFixed(2);
   return out;
 }
 
-/** Ölçülmeyen kalan yalnız ÜST SEVİYE fazlardan hesaplanır (iç içe olanlar sayılmaz). */
+/** The unmeasured remainder is computed from TOP-LEVEL phases only (nested ones do not count). */
 function ustSeviyeToplam(): number {
   return kayitlar.filter((k) => k.derinlik === 0).reduce((a, k) => a + k.ms, 0);
 }
 
-/** İnsan okunur özet — en yavaş faz işaretlenir. */
+/** Human-readable summary — the slowest phase is marked. */
 export function rapor(): string {
   if (!kayitlar.length) return '';
   const toplam = toplamMs();
   const enUzun = Math.max(...kayitlar.map((k) => k.ms));
   const genislik = Math.max(...kayitlar.map((k) => k.ad.length));
-  // Kayıtlar bitiş sırasında; iç içe olanların okunması için başlangıç sırasına al.
+  // Records are in completion order; sort by depth so nested ones read correctly.
   const sirali = [...kayitlar].sort((a, b) => a.derinlik - b.derinlik || 0);
   const satirlar = sirali.map((k) => {
     const pay = toplam > 0 ? (100 * k.ms) / toplam : 0;
@@ -93,8 +94,8 @@ export function rapor(): string {
     const ad = (girinti + k.ad).padEnd(genislik + k.derinlik * 2);
     return `  ${ad}  ${String(Math.round(k.ms)).padStart(6)} ms  ${bar}${isaret}`;
   });
-  // Ölçülmeyen kalan: fazlara girmeyen G/Ç, parse, yazma.
-  // İç içe fazlar ebeveynlerinin içinde zaten sayıldı; yalnız üst seviye toplanır.
+  // The unmeasured remainder: I/O, parsing and writing that no phase covers.
+  // Nested phases were already counted inside their parents; only top level is summed.
   const kalan = toplam - ustSeviyeToplam();
   return [
     '',

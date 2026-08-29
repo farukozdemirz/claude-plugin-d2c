@@ -1,18 +1,19 @@
 /**
- * Token redaksiyonu — MERKEZÎ tek nokta.
+ * Token redaction — the SINGLE central point.
  *
- * Ana plan Kural 2: Adobe `access_token` stdout/stderr, --verbose/--trace, hata
- * mesajları, runs.jsonl ve commit edilen fixture'lara HİÇBİR koşulda yazılmaz.
+ * The main plan's Rule 2: the Adobe `access_token` is NEVER, under any condition,
+ * written to stdout/stderr, --verbose/--trace, error messages, runs.jsonl, or committed
+ * fixtures.
  *
- * Token tüm tasarım dokümanına okuma erişimi veriyor ve her CDN isteğinin sorgu
- * dizgisinde bulunuyor. Bu yüzden dışarı çıkan her URL buradan geçer — çağıranın
- * "bu log zararsız" diye karar vermesine bırakılmaz.
+ * The token grants read access to the entire design document and appears in the query
+ * string of every CDN request. So every URL leaving this process passes through here —
+ * it is not left to the caller to decide that "this log is harmless".
  */
 
-/** Sorgu dizgisinde değeri gizlenecek parametreler. */
+/** Query parameters whose values are to be hidden. */
 const GIZLI = new Set(['access_token', 'api_key']);
 
-/** URL'deki gizli sorgu parametrelerini maskeler. Parse edilemezse kaba maskeye düşer. */
+/** Masks the secret query parameters in a URL. Falls back to a coarse mask if it cannot be parsed. */
 export function redactUrl(url: string): string {
   try {
     const u = new URL(url);
@@ -26,8 +27,8 @@ export function redactUrl(url: string): string {
 }
 
 /**
- * Serbest metinde token deseni arar ve maskeler.
- * Adobe token biçimi: `<epoch>_urn:aaid:sc:<bölge>:<uuid>;public_<hex>`
+ * Looks for the token pattern in free text and masks it.
+ * The Adobe token format: `<epoch>_urn:aaid:sc:<region>:<uuid>;public_<hex>`
  */
 export function redactText(s: string): string {
   return s
@@ -35,7 +36,7 @@ export function redactText(s: string): string {
     .replace(/\d{10}_urn:aaid:sc:[^;\s"']+;public_[0-9a-f]+/gi, '***');
 }
 
-/** Derin yapıdaki string'leri redakte eder — JSON çıktısı ve fixture yazımı için. */
+/** Redacts strings in a deep structure — for JSON output and fixture writing. */
 export function redactDeep<T>(value: T): T {
   if (typeof value === 'string') return redactText(value) as unknown as T;
   if (Array.isArray(value)) return value.map(redactDeep) as unknown as T;
@@ -49,7 +50,7 @@ export function redactDeep<T>(value: T): T {
   return value;
 }
 
-/** Redakte edilmiş mesajla hata — throw yolunun da sızdırmaması için. */
+/** An error with a redacted message — so the throw path does not leak either. */
 export function redactedError(message: string): Error {
   return new Error(redactText(message));
 }

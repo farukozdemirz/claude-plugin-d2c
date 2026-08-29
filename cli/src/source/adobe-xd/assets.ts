@@ -1,14 +1,14 @@
 /**
- * Varlık export'u — vektör → SVG, `pattern` → görsel dosyası.
+ * Asset export — vector → SVG, `pattern` → image file.
  *
- * `limitations.md`'nin iki maddesini kapatır:
- *   · "Vektör ikonlar: XD viewer SVG vermiyor, yolu yaklaşıktır"
- *   · "Görseller: indirilemiyor, placeholder bırakılır"
+ * It closes two entries in `limitations.md`:
+ *   · "Vector icons: the XD viewer gives no SVG, the path is approximate"
+ *   · "Images: cannot be downloaded, a placeholder is left instead"
  *
- * İkisi de AGC'de zaten var; iş onları dosyaya çıkarmak. Ölçülen gerçek maliyet:
- * kullanıcı ikonu yaklaşık çizildiği için iki görsel diff turu harcanmıştı.
+ * Both are already in AGC; the work is getting them into files. The measured real cost:
+ * two visual diff rounds were spent because a user icon had been drawn approximately.
  *
- * KURAL: dönüştürülemeyen düğüm **raporlanır**, sessizce atlanmaz.
+ * RULE: a node that cannot be converted is **reported**, never skipped silently.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -26,7 +26,7 @@ export interface SvgSonuc {
   ad: string;
   kutu: [number, number, number, number];
   yolAdedi: number;
-  /** Aynı içerikten kaç kopya vardı — carousel'de 8 özdeş ikon tek dosya olur. */
+  /** How many copies of the same content there were — 8 identical icons in a carousel become one file. */
   kullanim: number;
 }
 
@@ -46,7 +46,7 @@ export function slug(s: string): string {
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'varlik';
 }
 
-/** 2×3 affine tersi — grup-yerel koordinata dönmek için. */
+/** Inverse of a 2×3 affine — for converting back to group-local coordinates. */
 export function invert(m: Matrix): Matrix | null {
   const [a, b, c, d, e, f] = m;
   const det = a * d - b * c;
@@ -54,7 +54,7 @@ export function invert(m: Matrix): Matrix | null {
   return [d / det, -b / det, -c / det, a / det, (c * f - d * e) / det, (b * e - a * f) / det];
 }
 
-/** Yol verisindeki tüm koordinat çiftlerine matris uygular. */
+/** Applies a matrix to every coordinate pair in the path data. */
 export function pathTransform(d: string, m: Matrix): string {
   let i = 0;
   const sayilar: number[] = [];
@@ -84,11 +84,11 @@ function bbox(yollar: string[]): [number, number, number, number] | null {
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 
 /**
- * Vektör grubundan SVG üretir.
+ * Produces an SVG from a vector group.
  *
- * Yollar grubun ilk elemanının matrisine göre **yerelleştirilir**, böylece SVG
- * kendi başına anlamlı olur. `stroke.align` SVG'de karşılığı olmadığı için
- * **yazılmaz ve not düşülür** — uydurulmaz.
+ * Paths are **localised** against the matrix of the group's first element, so the SVG
+ * stands on its own. Because `stroke.align` has no SVG equivalent it is **not written,
+ * and a note is left** — it is not invented.
  */
 export function svgUret(grup: DuzSekil[], ad: string): { svg: string; kutu: [number, number, number, number] } | null {
   const ilk = grup[0];
@@ -97,7 +97,7 @@ export function svgUret(grup: DuzSekil[], ad: string): { svg: string; kutu: [num
   const yollar: Array<{ d: string; el: DuzSekil }> = [];
   for (const el of grup) {
     if (!el.yol) continue;
-    // Elemanın kendi matrisi → grup-yerel: inv(ilk) ∘ kendi
+    // The element's own matrix → group-local: inv(first) ∘ own
     const yerel = ters ? multiply(ters, el.matrix) : ([1, 0, 0, 1, 0, 0] as Matrix);
     yollar.push({ d: pathTransform(el.yol, yerel), el });
   }
@@ -111,8 +111,8 @@ export function svgUret(grup: DuzSekil[], ad: string): { svg: string; kutu: [num
     const attrs = [
       `d="${esc(d)}"`,
       `fill="${f}"`,
-      // Boolean şekil (compound) delik içerebilir; SVG varsayılanı `nonzero` deliği
-      // DOLDURUR. XD'nin `exclude`/`subtract` sonucu ancak evenodd ile doğru çıkar.
+      // A boolean shape (compound) can contain a hole; SVG's default `nonzero` FILLS the
+      // hole. XD's `exclude`/`subtract` result only comes out right with evenodd.
       ...(el.sekilTipi === 'compound' ? ['fill-rule="evenodd"'] : []),
       ...(s ? [`stroke="${s.renk}"`, `stroke-width="${s.genislik}"`] : ['stroke="none"']),
     ];
@@ -130,7 +130,7 @@ export function svgUret(grup: DuzSekil[], ad: string): { svg: string; kutu: [num
   return { svg, kutu };
 }
 
-/** Vektörleri `ebeveyn`e göre gruplar — çok yollu ikonlar tek SVG olur. */
+/** Groups vectors by `ebeveyn` — multi-path icons become a single SVG. */
 export function vektorGruplari(elemanlar: DuzEleman[]): Map<string, DuzSekil[]> {
   const g = new Map<string, DuzSekil[]>();
   for (const el of elemanlar) {
@@ -149,7 +149,7 @@ const UZANTI: Record<string, string> = {
   'image/svg+xml': '.svg', 'image/gif': '.gif',
 };
 
-/** `pattern` uid'lerini manifest üzerinden indirir. Aynı uid BİR KEZ iner. */
+/** Downloads `pattern` uids via the manifest. The same uid is downloaded ONCE. */
 export async function gorselleriIndir(
   proto: PrototypeData,
   uidler: string[],
@@ -189,7 +189,7 @@ export async function gorselleriIndir(
   return { gorseller, atlananlar };
 }
 
-/** Bir artboard'ın vektörlerini SVG'ye yazar. */
+/** Writes an artboard's vectors out as SVG. */
 export function svgleriYaz(elemanlar: DuzEleman[], hedefDizin: string): { svgler: SvgSonuc[]; atlananlar: Atlanan[] } {
   mkdirSync(hedefDizin, { recursive: true });
   const svgler: SvgSonuc[] = [];
@@ -206,10 +206,10 @@ export function svgleriYaz(elemanlar: DuzEleman[], hedefDizin: string): { svgler
     }
   }
 
-  // İÇERİK BAZLI TEKİLLEŞTİRME: bir carousel'de 8 özdeş kart varsa aynı ikon 8 kez
-  // üretilir. Aynı SVG'yi 8 dosyaya yazmak gereksiz ve kod fazını "hangisini
-  // kullanayım" sorusuyla bırakır. Aynı içerik → tek dosya; kaç yerde kullanıldığı
-  // `kullanim` alanında durur.
+  // CONTENT-BASED DEDUPLICATION: if a carousel has 8 identical cards, the same icon is
+  // produced 8 times. Writing the same SVG to 8 files is wasteful and leaves the code
+  // phase asking "which one do I use". Same content → one file; how many places use it
+  // is recorded in the `kullanim` field.
   const icerikIndeksi = new Map<string, SvgSonuc>();
   const kullanilanAd = new Map<string, number>();
   for (const [, grup] of vektorGruplari(elemanlar)) {

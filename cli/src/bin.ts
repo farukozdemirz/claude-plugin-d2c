@@ -1,4 +1,4 @@
-/** d2c CLI — komut yönlendirme. */
+/** d2c CLI — command dispatch. */
 import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { AdobeXdShare } from './source/adobe-xd/index.js';
@@ -152,7 +152,7 @@ async function cmdDoctor(args: Args): Promise<number> {
     { ad: 'node', seviye: (maj ?? 0) >= 18 ? 'ok' : 'hata', detay: `v${process.versions.node} (>=18 gerekli)` },
     { ad: 'fetch', seviye: typeof fetch === 'function' ? 'ok' : 'hata', detay: typeof fetch === 'function' ? 'yerleşik' : 'yok' },
   ];
-  // playwright-core OPSİYONEL: ölçüm yolu onsuz çalışır, doğrulama çalışmaz.
+  // playwright-core is OPTIONAL: the measurement path works without it, verification does not.
   let pw = false;
   try { await import('playwright-core'); pw = true; } catch { /* yok */ }
   k.push({
@@ -259,7 +259,7 @@ async function cmdSpec(args: Args): Promise<number> {
     return 2;
   }
 
-  // testid birleştirme: hedefte dosya varsa oku
+  // testid merge: read the target file if it exists
   const dir = args.outDir ?? '.';
   const olcumYol = join(dir, 'olcum.json');
   let onceki = null;
@@ -322,11 +322,12 @@ async function cmdRenderVerify(args: Args): Promise<number> {
       if (eksik.length) console.log(`   ⚠ font eksik: ${eksik.join(', ')} — metin kaynaklı ölçüler güvenilmez`);
       if (vp.yatayTasma) console.log('   ✗ yatay taşma var');
       console.log('');
-      // AYNI bulgunun tekrarını insan çıktısında topla — JSON'da hepsi durur.
+      // Collapse repeats of the SAME finding in the human output — JSON keeps all of them.
       //
-      // Bir kart 8 kez tekrar ediyorsa kartın İÇİNDEKİ her eleman da 8 kez tekrar eder;
-      // "tekrar adedi 8 → 4" bulgusu her biri için ayrı yazılırsa 5 satır olur ve aynı
-      // tek gerçeği anlatır. Phase 3'teki "bir adım, bir bulgu" ilkesinin karşılığı.
+      // If a card repeats 8 times, every element INSIDE the card repeats 8 times too;
+      // writing the "repeat count 8 → 4" finding separately for each gives 5 lines that
+      // all describe the same single fact. The counterpart of Phase 3's "one step, one
+      // finding" principle.
       const tekrarBulgusu = new Map<string, string[]>();
       for (const el of vp.elemanlar) {
         for (const f of el.farklar) {
@@ -398,8 +399,8 @@ async function cmdVisualDiff(args: Args): Promise<number> {
   if (eksik.length) {
     console.error(`HATA: eksik: --${eksik.join(' --')}\n\n` + HELP); return 2;
   }
-  // fileURLToPath: `.pathname` yolu yüzde-kodlar. Plugin'in kurulduğu dizinde
-  // boşluk ya da ASCII dışı karakter varsa python3 dosyayı bulamazdı.
+  // fileURLToPath: `.pathname` percent-encodes the path. If the directory the plugin is
+  // installed in contains a space or a non-ASCII character, python3 could not find the file.
   const scriptYolu = fileURLToPath(new URL('../../skills/d2c-code/scripts/visual-diff.py', import.meta.url));
   const v = await gorselDiff({
     olcumYolu: args.olcum!, xdUrl: args.xdUrl!, screen: args.screen!,
@@ -431,7 +432,7 @@ async function cmdSmoke(args: Args): Promise<number> {
   if (!url) { console.error('HATA: XD linki gerekli\n\n' + HELP); return 2; }
   const s = await olc('smoke', () => xdSmoke(url));
   emit(args, s, () => process.stdout.write(smokeYaz(s)));
-  // Sözleşme bozulduğunda CI KIRILMALI — smoke'un tek işi bu.
+  // When the contract breaks, CI MUST FAIL — that is the smoke test's only job.
   return s.seviye === 'ok' ? 0 : 1;
 }
 
@@ -439,7 +440,7 @@ async function cmdInventory(args: Args): Promise<number> {
   const kok = args._[1] ?? 'components';
   const env = await olc('envanter-tarama', () => envanterCikar(kok));
   emit(args, env, () => process.stdout.write(envanterYaz(env)));
-  // Parse edilemeyen dosya varsa envanter EKSİK — çıkış kodu bunu söyler.
+  // If a file could not be parsed the inventory is INCOMPLETE — the exit code says so.
   return env.hatalar.length ? 1 : 0;
 }
 
@@ -524,17 +525,17 @@ async function main(): Promise<void> {
     izlemeYaz(args);
     process.exit(code);
   } catch (e) {
-    // Hata durumunda da süreler yazılır: NEREDE takıldığını gösterir.
+    // Durations are written on the error path too: they show WHERE it got stuck.
     izlemeYaz(args);
-    // Hata yolu da redakte edilir — token stderr'e sızmaz (Kural 2).
+    // The error path is redacted as well — no token leaks to stderr (Rule 2).
     console.error(`HATA: ${redactText((e as Error).message)}`);
     process.exit(1);
   }
 }
 
 /**
- * İzleme çıktısı. `--verbose` stderr'e (stdout makine okunur kalsın),
- * `--trace` dosyaya — `runs.jsonl` bunu doğrudan tüketiyor.
+ * Trace output. `--verbose` goes to stderr (so stdout stays machine readable),
+ * `--trace` goes to a file — `runs.jsonl` consumes it directly.
  */
 function izlemeYaz(args: Args): void {
   if (args.verbose) {
@@ -542,7 +543,7 @@ function izlemeYaz(args: Args): void {
     if (r) console.error(r);
   }
   if (args.trace) {
-    // İzleme yalnız süre taşır; token/URL girmez (Kural 2).
+    // The trace carries durations only; no token or URL enters it (Rule 2).
     writeFileSync(args.trace, JSON.stringify(izlemeJson(), null, 2) + '\n');
   }
 }

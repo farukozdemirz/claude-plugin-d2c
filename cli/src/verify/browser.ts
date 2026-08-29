@@ -1,11 +1,12 @@
 /**
- * Playwright yaşam döngüsü.
+ * Playwright lifecycle.
  *
- * `playwright-core` + `channel:"chrome"` — sistemdeki Chrome kullanılır, **binary
- * indirmesi yok**. Kanal bulunamazsa `--cdp <url>` ile çalışan bir tarayıcıya bağlanılır.
+ * `playwright-core` + `channel:"chrome"` — the system's Chrome is used, **no binary
+ * download**. If the channel cannot be found, we connect to a running browser via
+ * `--cdp <url>`.
  *
- * Tarayıcı her koşuda kapatılır. Eski akıştaki paylaşımlı-tek-tarayıcı sorunu
- * (kilit dosyası, ajanın sayfayı devralması) burada yok: süreç bize ait.
+ * The browser is closed on every run. The old flow's shared-single-browser problem (the
+ * lock file, an agent taking over the page) does not exist here: the process is ours.
  */
 import type { Browser, Page } from 'playwright-core';
 import { olc } from '../util/trace.js';
@@ -22,10 +23,10 @@ export interface Oturum {
 }
 
 /**
- * `playwright-core` OPSİYONEL çalışma zamanı bağımlılığıdır.
+ * `playwright-core` is an OPTIONAL runtime dependency.
  *
- * Bundle'a gömülmez (dinamik require'ları var) ve ölçüm yolu için gerekmez — yalnız
- * doğrulama için. Yoksa net kurulum talimatı verilir.
+ * It is not bundled (it has dynamic requires) and is not needed for the measurement path
+ * — only for verification. When it is missing, clear install instructions are given.
  */
 async function playwrightYukle(): Promise<typeof import('playwright-core')> {
   try {

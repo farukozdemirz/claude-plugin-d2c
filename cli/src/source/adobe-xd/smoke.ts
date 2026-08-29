@@ -1,13 +1,13 @@
 /**
- * Canlı sözleşme kontrolü — haftalık çalışır.
+ * Live contract check — runs weekly.
  *
- * XD viewer private bir implementasyon. Adobe sessizce bir şey değiştirirse bunu
- * bir kullanıcı koşusunda öğrenmek en pahalı yol; haftalık smoke amacı **önce biz
- * öğrenelim**.
+ * The XD viewer is a private implementation. If Adobe silently changes something,
+ * finding out during a user's run is the most expensive way; the point of the weekly
+ * smoke test is that **we find out first**.
  *
- * Değerlendirme ağdan AYRI: `degerlendir()` saf bir fonksiyon, fixture'larla test
- * edilebiliyor. Elimizde her zaman geçerli bir canlı link olmayabilir; testin
- * canlı bağımlılığı olmaması bu yüzden önemli.
+ * The evaluation is SEPARATE from the network: `degerlendir()` is a pure function and
+ * can be tested with fixtures. We may not always have a valid live link; that the test
+ * has no live dependency is exactly why this matters.
  */
 import { fetchShare, type PrototypeData } from './share.js';
 import { fetchComponentJson, CONTENT_TYPES } from './cdn.js';
@@ -21,11 +21,11 @@ export interface SmokeSonuc {
   artboardSayisi: number;
   denenenArtboard: string | null;
   kontroller: Kontrol[];
-  /** Tek satırlık özet — CI bildiriminde bu kullanılır. */
+  /** A one-line summary — this is what the CI notification uses. */
   ozet: string;
 }
 
-/** Saf değerlendirme — ağ yok. Fixture'larla test edilir. */
+/** Pure evaluation — no network. Tested with fixtures. */
 export function degerlendir(
   proto: PrototypeData,
   agc: Record<string, any> | null,
@@ -55,7 +55,7 @@ export function degerlendir(
       : `${kotu.length}/${kontroller.length} kontrol sorunlu: ` +
         kotu.map((k) => `${k.ad} (${k.seviye})`).join(', ');
 
-  // Kural 2: sonuç bir yere (CI logu, bildirim, artefakt) yazılacak — token GEÇMEZ.
+  // Rule 2: the result will be written somewhere (CI log, notification, artifact) — NO token passes.
   return redactDeep({
     seviye,
     tarih: new Date().toISOString(),
@@ -66,11 +66,11 @@ export function degerlendir(
   }) as SmokeSonuc;
 }
 
-/** Canlı koşu: shell + bir AGC indir, sözleşmeyi değerlendir. */
+/** Live run: fetch the shell + one AGC, then evaluate the contract. */
 export async function xdSmoke(url: string): Promise<SmokeSonuc> {
   const proto = await fetchShare(url);
   const ab = proto.manifest?.artboards ?? [];
-  // Temsilî bir artboard yeter; amaç sözleşme, kapsam değil.
+  // A representative artboard is enough; the goal is the contract, not coverage.
   const hedef = ab.find((a) => (a.components ?? []).some((c) => c.rel === 'primary')) ?? null;
 
   let agc: Record<string, any> | null = null;
@@ -88,7 +88,7 @@ export async function xdSmoke(url: string): Promise<SmokeSonuc> {
   return degerlendir(proto, agc, hata, hedef?.name ?? null);
 }
 
-/** İnsan okunur rapor. */
+/** Human-readable report. */
 export function smokeYaz(s: SmokeSonuc): string {
   const isaret = { ok: '✓', uyari: '⚠', hata: '✗' } as const;
   const satirlar = [

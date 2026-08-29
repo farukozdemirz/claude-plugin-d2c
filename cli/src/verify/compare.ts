@@ -1,18 +1,18 @@
 /**
- * Hedef ↔ ölçüm karşılaştırması.
+ * Target ↔ measurement comparison.
  *
- * Toleranslar `agents/design-diff.md` §4'ten **birebir** alındı:
+ * The tolerances are taken **verbatim** from `agents/design-diff.md` §4:
  *
- *   | Ne                                                   | Tolerans |
- *   |------------------------------------------------------|----------|
- *   | konum, boyut, padding, gap, radius, border kalınlığı  | ±3 px    |
- *   | renk (hex)                                            | YOK      |
- *   | font-size                                             | YOK      |
- *   | line-height, font-weight                              | YOK      |
+ *   | What                                                | Tolerance |
+ *   |-----------------------------------------------------|-----------|
+ *   | position, size, padding, gap, radius, border width   | ±3 px     |
+ *   | colour (hex)                                         | NONE      |
+ *   | font-size                                            | NONE      |
+ *   | line-height, font-weight                             | NONE      |
  *
- * Kabul edilen sapmalar **gizlenmez**: `durum: "kabul"` + `sebep` ile raporlanır ve
- * `sapan` sayılmaz. Font eksikse metin kaynaklı satırlar `uyari` olur — `sapan` DEĞİL
- * (design-diff'in açık kuralı).
+ * Accepted deviations are **not hidden**: they are reported with `durum: "kabul"` plus a
+ * `sebep`, and do not count as `sapan`. When a font is missing, text-derived rows become
+ * `uyari` — NOT `sapan` (design-diff's explicit rule).
  */
 import type { Olcum, OlcumEleman } from '../contracts/olcum.js';
 import type { Fark, ElemanSonucSchema } from '../contracts/verification.js';
@@ -21,18 +21,19 @@ import type { ElemanOlcum } from './measure.js';
 
 export type ElemanSonuc = z.infer<typeof ElemanSonucSchema>;
 
-/** Konum/boyut toleransı — design-diff ile aynı. */
+/** Position/size tolerance — the same as design-diff. */
 export const TOLERANS_PX = 3;
 
 /**
- * Bilinen ve kabul edilmiş sapmalar — her birinin **ÜST SINIRI** var.
+ * Known and accepted deviations — each has an **UPPER BOUND**.
  *
- * Sınır şart: `border-box` ±2 px'lik bir olgu. Sınırsız kabul, 1664 px'lik bir farkı
- * "kabul" diye işaretler ve gerçek sapmayı gizler — deponun açık kuralı bunu yasaklıyor
- * ("Gizleme, tolerans gevşetme, hedef değeri değiştirme yok"). Bu gerçekten oldu:
- * ilk implementasyonda bölüm yüksekliği 600 → 2264 farkı sessizce "kabul" çıktı.
+ * The bound is essential: `border-box` is a ±2 px phenomenon. Unbounded acceptance would
+ * label a 1664 px difference as "accepted" and hide a real deviation — the repo's
+ * explicit rule forbids that ("no hiding, no loosening tolerances, no changing target
+ * values"). This actually happened: in the first implementation a section height
+ * difference of 600 → 2264 came out silently "accepted".
  *
- * Sınırı aşan fark **sapan** sayılır.
+ * A difference beyond the bound counts as **sapan**.
  */
 export const KABUL_SEBEPLERI: Record<string, { aciklama: string; sinirPx: number }> = {
   'border-box': {
@@ -60,7 +61,7 @@ const sayi = (v: string | number | null | undefined): number | null => {
   return m ? parseFloat(m[0]) : null;
 };
 
-/** `12px` / `12px 12px 12px 12px` → ilk sayı. Dört köşe farklıysa hepsi döner. */
+/** `12px` / `12px 12px 12px 12px` → the first number. If the four corners differ, all are returned. */
 const radiusSayilari = (css: string): number[] =>
   (css.match(/[\d.]+/g) ?? []).map(Number);
 
@@ -87,7 +88,7 @@ function pxFark(
     if (kural && Math.abs(fark) <= kural.sinirPx) {
       return { alan, hedef, olculen, fark, durum: 'kabul', sebep: kural.aciklama };
     }
-    // Sınırı aşıyor: kabul edilen sapmayla AÇIKLANAMAZ, gerçek sapmadır.
+    // Beyond the bound: it CANNOT be explained by the accepted deviation, it is real.
     return {
       alan, hedef, olculen, fark, durum: 'sapan',
       sebep: `"${kabulSebebi}" ile açıklanamaz — bu sapma en fazla ±${kural?.sinirPx ?? 0}px olabilirdi`,
@@ -107,14 +108,14 @@ function birebirFark(
   if (hedef == null || olculen == null || hedef === '') return null;
   const esit = String(hedef).toUpperCase() === String(olculen).toUpperCase();
   if (esit) return { alan, hedef, olculen, fark: null, durum: 'gecti' };
-  // Font eksikse metin kaynaklı ölçüler güvenilmez → UYARI, sapan değil.
+  // If the font is missing, text-derived measurements are unreliable → WARNING, not a deviation.
   if (metneBagli && aile && ctx.eksikFontlar.has(aile)) {
     return { alan, hedef, olculen, fark: null, durum: 'uyari', sebep: KABUL_SEBEPLERI['font-eksik']!.aciklama };
   }
   return { alan, hedef, olculen, fark: null, durum: 'sapan' };
 }
 
-/** Bir elemanın hedeflerini ölçümle karşılaştırır. */
+/** Compares an element's targets against the measurement. */
 export function elemaniKarsilastir(
   hedefEl: OlcumEleman,
   olculen: ElemanOlcum,
@@ -133,7 +134,7 @@ export function elemaniKarsilastir(
     const [, , hw, hh] = h.kutu;
     const wF = pxFark('genişlik', hw, olculen.w, ctx, 'border-box');
     if (wF) farklar.push(wF);
-    // Metin yüksekliği: XD çerçevesi ≠ CSS satır kutusu (kabul edilen sapma).
+    // Text height: the XD frame ≠ the CSS line box (an accepted deviation).
     const hF = pxFark('yükseklik', hh, olculen.h, ctx,
       hedefEl.tip === 'metin' ? 'metin-cercevesi' : 'border-box');
     if (hF) farklar.push(hF);
@@ -145,9 +146,9 @@ export function elemaniKarsilastir(
       const rF = pxFark('radius', hedR, olc0, ctx);
       if (rF) farklar.push(rF);
     }
-    // METİN elemanlarında AGC `fill` METİN RENGİDİR, arka plan değil — `font.renk`
-    // olarak zaten karşılaştırılıyor. Burada arka planla kıyaslamak her metin için
-    // sahte "hedef #0C2380 · render transparent" sapması üretirdi.
+    // On TEXT elements the AGC `fill` is the TEXT COLOUR, not a background — it is
+    // already compared as `font.renk`. Comparing it against the background here would
+    // produce a fake "target #0C2380 · render transparent" deviation for every text.
     if (h.dolgu && hedefEl.tip !== 'metin') {
       const f = birebirFark('arka plan', h.dolgu, olculen.background, ctx);
       if (f) farklar.push(f);
@@ -178,10 +179,10 @@ export function elemaniKarsilastir(
       if (x) farklar.push(x);
     }
     if (aile) {
-      // `next/font/local` üretilen adı değiştirir. Ölçülen iki gerçek örnek:
-      //   "Bw Modelica"  → "bwModelica"   (aynı kök)
-      //   "Tobias TRIAL" → "tobias"       (XD adı DAHA UZUN — ek etiket taşıyor)
-      // Bu yüzden tek yönlü `includes` yetmez; biri diğerinin ÖNEKİ olmalı.
+      // `next/font/local` changes the generated name. Two real measured examples:
+      //   "Bw Modelica"  → "bwModelica"   (same root)
+      //   "Tobias TRIAL" → "tobias"       (the XD name is LONGER — it carries an extra tag)
+      // So a one-directional `includes` is not enough; one must be a PREFIX of the other.
       const norm = (s: string) => s.toLocaleLowerCase('tr').replace(/[^a-z0-9]/g, '');
       const a1 = norm(aile);
       const a2 = norm(olculen.fontFamily);
@@ -197,7 +198,7 @@ export function elemaniKarsilastir(
     }
   }
 
-  // Tekrar eden eleman: adet + aradaki boşluk
+  // Repeated element: count + the gap between them
   if (hedefEl.tekrar?.duzenli && hedefEl.tekrar.adim != null && hedefEl.tekrar.eksen !== 'izgara') {
     const adetF: Fark = {
       alan: 'tekrar adedi', hedef: hedefEl.tekrar.adet, olculen: olculen.adet,

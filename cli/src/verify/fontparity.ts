@@ -1,23 +1,24 @@
 /**
- * POC-4 — AGC font metriği ↔ Chrome `fontBoundingBox` pariteşi.
+ * POC-4 — parity between the AGC font metric and Chrome's `fontBoundingBox`.
  *
- * Ana planın M1 kuralı: `fontKutusuAgc` ham AGC değeridir ve Chrome metriği
- * SAYILMAZ. Bu POC, hangi ailelerde eşit olduğunu **aile başına** belirler.
+ * The main plan's M1 rule: `fontKutusuAgc` is the raw AGC value and does NOT count as
+ * the Chrome metric. This POC determines, **per family**, where the two are equal.
  *
- * Ön ölçüm (ana plandan): Bw Modelica dört puntoda birebir, Tobias TRIAL 48px'te
- * 10px sapıyor ve yarı-satırın İŞARETİNİ değiştiriyor. Yani sonuç karışık bekleniyor
- * ve karar hep-ya-hiç olmamalı.
+ * Preliminary measurement (from the main plan): Bw Modelica matches exactly at four
+ * sizes, while Tobias TRIAL is off by 10px at 48px and flips the SIGN of the half-line.
+ * So a mixed result is expected and the decision must not be all-or-nothing.
  *
- * Parite kanıtlanmayan ailelerde `d2c-code` §3'teki tarayıcı ölçümü **korunur**.
+ * For families where parity is not proven, the browser measurement from `d2c-code` §3
+ * is **preserved**.
  */
 import type { SayfaOlcum } from './measure.js';
 
-/** Farkın "parite" sayılması için üst sınır (px). */
+/** The upper bound for a difference to count as "parity" (px). */
 export const PARITE_ESIGI = 0.5;
 
 export interface PariteSatir {
   aile: string;
-  /** Gerçekte render edilen aile (next/font üretilen adı olabilir). */
+  /** The family actually rendered (may be the name next/font generated). */
   cozulmusAile: string;
   punto: number;
   agc: number | null;
@@ -28,7 +29,7 @@ export interface PariteSatir {
 
 export interface PariteSonuc {
   satirlar: PariteSatir[];
-  /** Aile başına karar — `agc` yalnız TÜM puntolarda parite varsa. */
+  /** The per-family decision — `agc` only when there is parity at EVERY size. */
   kararlar: Record<string, 'agc' | 'tarayici'>;
   fontYuklu: Record<string, boolean>;
 }
@@ -52,26 +53,27 @@ export function pariteHesapla(
     satirlar.push({
       aile: fk.aile, cozulmusAile: fk.cozulmusAile, punto: fk.punto,
       agc, chrome: fk.kutu, fark,
-      // Font yüklü değilse parite BELİRSİZ — eşleşse bile güvenilmez.
+      // If the font is not loaded, parity is UNDETERMINED — unreliable even if it matches.
       parite: yuklu ? parite : null,
     });
     if (parite === false) aileHatali.add(fk.aile);
     if (parite !== null) aileGorulen.add(fk.aile);
   }
 
-  // YÜKLÜ OLMAYAN font için parite BELİRLENEMEZ.
+  // Parity CANNOT BE DETERMINED for a font that is not loaded.
   //
-  // Ölçüldü: Helvetica Neue projede yok; Chrome fallback'in metriğini (14) ölçtü ve
-  // AGC değeriyle (14) TESADÜFEN eşleşti → yanlış "agc" kararı. Yüklü olmayan fontta
-  // ölçüm zaten güvenilmez; güvenli taraf `tarayici`.
+  // Measured: Helvetica Neue is absent from the project; Chrome measured the fallback's
+  // metric (14) and it matched the AGC value (14) BY COINCIDENCE → a wrong "agc"
+  // decision. Measurement is unreliable for an unloaded font anyway; the safe side is
+  // `tarayici`.
   const yukluOlmayan = new Set(olcum.fontlar.filter((f) => !f.yuklu).map((f) => f.aile));
 
   const kararlar: Record<string, 'agc' | 'tarayici'> = {};
   for (const aile of aileGorulen) {
-    // Tek bir punto bile sapıyorsa VEYA font yüklü değilse tarayıcı ölçümü korunur.
+    // If even a single size deviates, OR the font is not loaded, the browser measurement is kept.
     kararlar[aile] = aileHatali.has(aile) || yukluOlmayan.has(aile) ? 'tarayici' : 'agc';
   }
-  // Hiç AGC karşılığı olmayan aileler ölçülemedi → varsayılan güvenli taraf.
+  // Families with no AGC counterpart could not be measured → default to the safe side.
   for (const f of olcum.fontlar) {
     if (!(f.aile in kararlar)) kararlar[f.aile] = 'tarayici';
   }

@@ -1,13 +1,13 @@
 /**
- * olcum.json — CLAUDE'UN TEK GİRDİSİ.
+ * olcum.json — CLAUDE'S ONLY INPUT.
  *
- * Ana plan §8'in değişmez kuralı:
- *   design.json → yalnız deterministik araçlar
- *   olcum.json  → yalnız Claude
+ * The invariant from the main plan §8:
+ *   design.json → deterministic tools only
+ *   olcum.json  → Claude only
  *
- * Bu yüzden dosya **kendi içinde yeterli** olmak zorunda: Claude'un bileşeni yazmak
- * için ihtiyaç duyduğu her değer inline bulunur, hiçbir değer için başka dosyaya
- * bakılmaz. `id` alanları yalnız izlenebilirlik ve yeniden üretim içindir.
+ * So this file has to be **self-contained**: every value Claude needs to write the
+ * component is inline, and no value requires looking at another file. The `id` fields
+ * exist only for traceability and reproduction.
  */
 import { z } from 'zod';
 
@@ -40,22 +40,22 @@ export const FontSchema = z.object({
   ls: z.number().nullable(),
   renk: z.string().nullable(),
   hiza: z.string().nullable(),
-  /** HAM AGC değeri. M1'de TÜKETİLMEZ (POC-4, M2). */
+  /** The RAW AGC value. NOT CONSUMED in M1 (POC-4, M2). */
   fontKutusuAgc: z.number().nullable(),
-  /** M1'de her zaman "tarayici": kod fazı mevcut ölçümü sürdürür. */
+  /** Always "tarayici" in M1: the code phase keeps using the existing measurement. */
   fontKutusuKaynak: z.enum(['tarayici', 'agc']),
-  /** M1'de her zaman null — kod fazı tarayıcıda hesaplar. */
+  /** Always null in M1 — the code phase computes it in the browser. */
   yariSatir: z.number().nullable(),
 });
 
 /**
- * Aynı imzalı 3+ elemanın sıkıştırılmış hali. Üç biçim:
- *   · düzenli 1B  → `eksen: "x"|"y"` + `adim`
- *   · düzenli ızgara → `eksen: "izgara"` + `adimX`/`adimY` + `sutun`/`satir`
- *   · düzensiz    → `duzenli: false` + `konumlar` (tüm sol-üst köşeler)
+ * The compressed form of 3+ elements with the same signature. Three shapes:
+ *   · regular 1-D    → `eksen: "x"|"y"` + `adim`
+ *   · regular grid   → `eksen: "izgara"` + `adimX`/`adimY` + `sutun`/`satir`
+ *   · irregular      → `duzenli: false` + `konumlar` (every top-left corner)
  *
- * Düzensiz durumda BİLGİ KAYBI YOK: her elemanın konumu korunur, yalnız tekrarlanan
- * stil/boyut alanları bir kez yazılır.
+ * In the irregular case NO INFORMATION IS LOST: every element's position is preserved,
+ * only the repeated style/size fields are written once.
  */
 export const TekrarSchema = z.object({
   adet: z.number(),
@@ -73,9 +73,9 @@ export const ElemanSchema = z.object({
   id: z.string().nullable(),
   ad: z.string().nullable(),
   tip: z.string(),
-  /** Güvenle türetilebilen etiketler; türetilemezse null — uydurulmaz. */
+  /** Labels that can be derived safely; null when they cannot — nothing is invented. */
   rol: z.string().nullable(),
-  /** Kod fazı doldurur. `render verify` çağrılmadan önce dolu olmalı. */
+  /** Filled in by the code phase. Must be populated before `render verify` is called. */
   testid: z.string().nullable(),
   ebeveyn: z.string().nullable(),
   sira: z.number(),
@@ -91,7 +91,7 @@ export const HesaplananSchema = z.object({
   ne: z.string(),
   desktop: z.number().nullable(),
   mobil: z.number().nullable(),
-  /** Değerin nereden geldiği — playbook §14 disiplini. */
+  /** Where the value came from — the playbook §14 discipline. */
   nasil: z.string(),
 });
 

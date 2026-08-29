@@ -1,9 +1,11 @@
 /**
- * spec.md — İNSAN için rapor. Claude'un girdisi `olcum.json`; bu dosya okunabilirlik için.
+ * spec.md — the report for HUMANS. Claude's input is `olcum.json`; this file is for
+ * readability.
  *
- * Format `d2c-spec` SKILL.md'den: ekran · palet · character styles · ölçülen elemanlar ·
- * hesaplanan boşluklar. Kaynak işaretleri korunuyor:
- *   P = panelden okunan (artık: kaynak veriden) · Ö = pikselden ölçülen · H = hesaplanan
+ * The format comes from the `d2c-spec` SKILL.md: screen · palette · character styles ·
+ * measured elements · computed gaps. The source markers are preserved:
+ *   P = read from the panel (now: from the source data) · Ö = measured from pixels ·
+ *   H = computed
  */
 import type { Olcum } from '../contracts/olcum.js';
 

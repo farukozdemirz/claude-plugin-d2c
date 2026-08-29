@@ -1,9 +1,9 @@
 /**
- * AGC scenegraph gezinme + affine düzleştirme.
+ * AGC scenegraph traversal + affine flattening.
  *
- * Düğümler iç içe `transform` taşıyor; kutular artboard-göreli olmalı.
- * Artboard kökeni manifest'teki `bounds.x/y` — POC-1'de doğrulandı:
- * `Rectangle 8235` mobil artboard'da x=16.00 çıkıyor (benchmark 16).
+ * Nodes carry nested `transform`s; boxes have to end up artboard-relative.
+ * The artboard origin is `bounds.x/y` from the manifest — verified in POC-1:
+ * `Rectangle 8235` comes out at x=16.00 on the mobile artboard (benchmark says 16).
  */
 import { rgbToHex, type Rgb } from '../../util/color.js';
 import { measureShape, type SekilOlcu } from './shape.js';
@@ -13,7 +13,7 @@ import { measureText, type MetinOlcu } from './text.js';
 export type Matrix = readonly [number, number, number, number, number, number];
 export const IDENTITY: Matrix = [1, 0, 0, 1, 0, 0];
 
-/** m ∘ n — önce n, sonra m uygulanır. */
+/** m ∘ n — n is applied first, then m. */
 export function multiply(m: Matrix, n: Matrix): Matrix {
   const [a1, b1, c1, d1, e1, f1] = m;
   const [a2, b2, c2, d2, e2, f2] = n;
@@ -53,9 +53,9 @@ export interface DuzSekil extends DuzElemanBase {
   tip: 'sekil';
   olcu: SekilOlcu;
   sekilTipi: string;
-  /** Vektör yol verisi — Faz 6 SVG export'u için taşınır (yalnız `path` tipinde). */
+  /** Vector path data — carried for the Phase 6 SVG export (only on the `path` type). */
   yol?: string;
-  /** Dolgu `gradient` gibi desteklenmeyen bir tipse burada durur; export raporlar. */
+  /** If the fill is an unsupported type such as `gradient`, it lands here; the export reports it. */
   desteklenmeyenDolgu?: string;
 }
 export interface DuzMetin extends DuzElemanBase { tip: 'metin'; olcu: MetinOlcu }
@@ -80,12 +80,12 @@ function strokeOf(node: Record<string, any>): Stroke | null {
   if (!s || s.type !== 'solid') return null;
   const v = s?.color?.value as Rgb | undefined;
   if (!v || typeof v.r !== 'number') return null;
-  // `align` yoksa XD varsayılanı center — spec panelinin "Center Stroke" dediği hal.
+  // Without `align`, XD's default is center — what the spec panel calls "Center Stroke".
   const hiza = s.align === 'inside' || s.align === 'outside' ? s.align : 'center';
   return { genislik: typeof s.width === 'number' ? s.width : 1, renk: rgbToHex(v), hiza };
 }
 
-/** `pattern` dolgusu → görsel. Faz 6 bunu indirecek; M1'de yalnız alan taşınır. */
+/** A `pattern` fill → an image. Phase 6 downloads it; in M1 only the field is carried. */
 function patternUid(node: Record<string, any>): { uid: string | null; scale: string | null } | null {
   const f = node?.style?.fill;
   if (f?.type !== 'pattern') return null;
@@ -94,8 +94,8 @@ function patternUid(node: Record<string, any>): { uid: string | null; scale: str
 }
 
 /**
- * Scenegraph'ı düzleştirir. Kutular hâlâ DOKÜMAN uzayında — artboard'a çevirmek
- * çağıranın işi (`toArtboardBox`).
+ * Flattens the scenegraph. Boxes are still in DOCUMENT space — converting them to the
+ * artboard is the caller's job (`toArtboardBox`).
  */
 export function flatten(agc: Record<string, any>): DuzlestirmeSonucu {
   const elemanlar: DuzEleman[] = [];
@@ -130,7 +130,7 @@ export function flatten(agc: Record<string, any>): DuzlestirmeSonucu {
         elemanlar.push({
           ...base(), tip: 'sekil', olcu, sekilTipi: node.shape?.type ?? '?',
           ...(typeof node.shape?.path === 'string' && node.shape.path ? { yol: node.shape.path } : {}),
-          // `solid`/`none` dışındaki dolgular (gradient…) SVG'ye çevrilemiyor — İŞARETLE.
+          // Fills other than `solid`/`none` (gradient…) cannot be converted to SVG — MARK them.
           ...(f && f.type !== 'solid' && f.type !== 'none' && f.type !== 'pattern'
             ? { desteklenmeyenDolgu: String(f.type) }
             : {}),
@@ -156,18 +156,18 @@ export function flatten(agc: Record<string, any>): DuzlestirmeSonucu {
 }
 
 /**
- * XD metin çerçevesi kutusu.
+ * The XD text frame box.
  *
- * İki nokta ölçümle doğrulandı:
+ * Two points were verified by measurement:
  *
- * 1. **Yükseklik.** `tailwind.md`'de belgelenen formül: XD, otomatik yükseklikli metin
- *    çerçevesi için `(n−1) × line-height + fontKutusu` verir — CSS'in `n × line-height`
- *    render etmesinden FARKLIDIR ve yarı-satır telafisinin sebebi budur.
- * 2. **Dikey köken.** AGC'de metin düğümünün transform'u ilk satırın TABAN ÇİZGİSİNİ
- *    gösteriyor; XD'nin raporladığı çerçeve üstü `taban − ascent`. Doğrulandı:
- *    "Ürün Yorumları" 48px Tobias → taban 3068, ascent 45 → 3023 (benchmark: 3023).
+ * 1. **Height.** The formula documented in `tailwind.md`: for an auto-height text frame
+ *    XD reports `(n−1) × line-height + fontBox` — which DIFFERS from CSS rendering
+ *    `n × line-height`, and that is the reason half-line compensation exists.
+ * 2. **Vertical origin.** In AGC a text node's transform points at the BASELINE of the
+ *    first line; the frame top XD reports is `baseline − ascent`. Verified:
+ *    "Ürün Yorumları" 48px Tobias → baseline 3068, ascent 45 → 3023 (benchmark: 3023).
  *
- * Burada XD'nin verdiği kutuyu üretiyoruz; CSS'e çevirmek kod fazının işi.
+ * Here we produce the box XD reports; converting it to CSS is the code phase's job.
  */
 function textFrame(el: DuzMetin): { x: number; y: number; w: number; h: number } {
   const { satirSayisi, font, metinGenisligi, ascent } = el.olcu;
@@ -182,7 +182,7 @@ function textFrame(el: DuzMetin): { x: number; y: number; w: number; h: number }
   };
 }
 
-/** Düz elemanın kutusunu artboard-göreli koordinata çevirir. */
+/** Converts a flattened element's box into artboard-relative coordinates. */
 export function toArtboardBox(
   el: DuzEleman,
   origin: { x: number; y: number }
@@ -190,7 +190,7 @@ export function toArtboardBox(
   const local = el.tip === 'metin' ? textFrame(el) : (el.olcu?.kutu ?? null);
   if (!local) return null;
   const p = applyPoint(el.matrix, local.x, local.y);
-  // Yalnız ölçek+öteleme destekleniyor; döndürme varsa kutu yaklaşıktır.
+  // Only scale+translation are supported; if there is rotation the box is approximate.
   const sx = Math.hypot(el.matrix[0], el.matrix[1]);
   const sy = Math.hypot(el.matrix[2], el.matrix[3]);
   return {

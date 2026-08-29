@@ -1,4 +1,4 @@
-/** verification.json — deterministik render doğrulamasının çıktısı. */
+/** verification.json — the output of the deterministic render verification. */
 import { z } from 'zod';
 
 export const VERIFICATION_SCHEMA_VERSION = 1;
@@ -9,10 +9,11 @@ export const FarkSchema = z.object({
   olculen: z.union([z.number(), z.string()]).nullable(),
   fark: z.number().nullable(),
   /**
-   * `gecti`  — tolerans içinde
-   * `kabul`  — bilinen ve kabul edilmiş sapma (sebep zorunlu) · sapan SAYILMAZ ama GİZLENMEZ
-   * `uyari`  — ölçüm güvenilmez (ör. font yüklü değil) · `✗` değil
-   * `sapan`  — gerçek sapma
+   * `gecti`  — within tolerance
+   * `kabul`  — a known and accepted deviation (a reason is mandatory) · NOT counted as a
+   *            deviation, but NEVER HIDDEN
+   * `uyari`  — the measurement is unreliable (e.g. the font is not loaded) · not a `✗`
+   * `sapan`  — a real deviation
    */
   durum: z.enum(['gecti', 'kabul', 'uyari', 'sapan']),
   sebep: z.string().optional(),
@@ -47,7 +48,7 @@ export const VerificationSchema = z.object({
     toplam: z.number(), gecen: z.number(), kabul: z.number(),
     uyari: z.number(), sapan: z.number(),
   }),
-  /** Ölçüm yapılamadıysa sebebi — sessiz başarısızlık yok. */
+  /** If no measurement could be made, the reason — there is no silent failure. */
   durduruldu: z.string().nullable(),
 });
 

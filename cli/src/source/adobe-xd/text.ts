@@ -1,17 +1,17 @@
 /**
- * AGC metin düğümlerinden tipografi çıkarır.
+ * Extracts typography from AGC text nodes.
  *
- * Spec panelinin verdiğinden fazlasını veriyor:
- *   · satır yüksekliği   = ardışık satırların `position` farkı
- *   · font kutusu        = |ascent| + descent   ← M1'de TÜKETİLMEZ (POC-4, M2)
- *   · metin genişliği    = layoutBounds.right
- *   · hiza               = paragraphAlign
+ * It gives more than the spec panel does:
+ *   · line height    = the `position` difference between consecutive lines
+ *   · font box       = |ascent| + descent   ← NOT CONSUMED in M1 (POC-4, M2)
+ *   · text width     = layoutBounds.right
+ *   · alignment      = paragraphAlign
  *
- * ÖNEMLİ (ana plan M1 kuralı): `fontKutusuAgc` HAM AGC değeridir ve Chrome
- * `fontBoundingBox` metriği SAYILMAZ. Ölçüldü: Bw Modelica dört puntoda birebir
- * tutuyor ama Tobias TRIAL 48px'te 10px sapıyor (56 vs 66) ve yarı-satırın işaretini
- * değiştiriyor. Parite aile başına M2'de POC-4 ile belirlenecek; o zamana kadar kod
- * fazı mevcut tarayıcı ölçümünü sürdürür.
+ * IMPORTANT (the main plan's M1 rule): `fontKutusuAgc` is the RAW AGC value and does
+ * NOT count as Chrome's `fontBoundingBox` metric. Measured: Bw Modelica matches exactly
+ * at four sizes, but Tobias TRIAL is off by 10px at 48px (56 vs 66) and flips the sign
+ * of the half-line. Parity will be decided per family in M2 via POC-4; until then the
+ * code phase keeps using the existing browser measurement.
  */
 import { argbToHex } from '../../util/color.js';
 
@@ -33,17 +33,17 @@ export interface MetinOlcu {
   metinGenisligi: number | null;
   satirSayisi: number;
   /**
-   * İlk satırın ascent'i (pozitif). AGC'de metin düğümünün transform'u ilk satırın
-   * TABAN ÇİZGİSİNİ gösteriyor; XD'nin raporladığı çerçeve üstü `taban − ascent`.
-   * Doğrulandı: "Ürün Yorumları" 48px Tobias → taban 3068, ascent 45, çerçeve üstü
-   * 3023 = benchmark değeri.
+   * The first line's ascent (positive). In AGC a text node's transform points at the
+   * BASELINE of the first line; the frame top XD reports is `baseline − ascent`.
+   * Verified: "Ürün Yorumları" 48px Tobias → baseline 3068, ascent 45, frame top
+   * 3023 = the benchmark value.
    */
   ascent: number | null;
 }
 
 interface Line { position?: number; layoutBounds?: { left?: number; right?: number; ascent?: number; descent?: number } }
 
-/** Bir metin düğümündeki tüm satırları paragraf sırasına göre düzler. */
+/** Flattens all lines in a text node into paragraph order. */
 export function flattenLines(ux: Record<string, any>): Line[] {
   const paras = ux?.outlinesLayout?.static?.paragraphs;
   if (!Array.isArray(paras)) return [];
@@ -53,8 +53,8 @@ export function flattenLines(ux: Record<string, any>): Line[] {
 }
 
 /**
- * Satır yüksekliği: ardışık iki satırın `position` farkı.
- * Tek satırlık metinde ÖLÇÜLEMEZ — `null` döner, uydurulmaz.
+ * Line height: the `position` difference between two consecutive lines.
+ * On single-line text it CANNOT BE MEASURED — returns `null`, it is not invented.
  */
 export function lineHeightFrom(lines: Line[]): number | null {
   if (lines.length < 2) return null;
@@ -64,20 +64,20 @@ export function lineHeightFrom(lines: Line[]): number | null {
   return lh > 0 ? +lh.toFixed(4) : null;
 }
 
-/** İlk satırın ascent'i, pozitif olarak. */
+/** The first line's ascent, as a positive number. */
 export function ascentFrom(lines: Line[]): number | null {
   const a = lines[0]?.layoutBounds?.ascent;
   return typeof a === 'number' ? Math.abs(a) : null;
 }
 
-/** Font kutusu: |ascent| + descent. AGC ham değeri (bkz. dosya başı notu). */
+/** Font box: |ascent| + descent. The raw AGC value (see the note at the top of the file). */
 export function fontBoxFrom(lines: Line[]): number | null {
   const lb = lines[0]?.layoutBounds;
   if (!lb || typeof lb.ascent !== 'number' || typeof lb.descent !== 'number') return null;
   return +(Math.abs(lb.ascent) + lb.descent).toFixed(4);
 }
 
-/** Metin genişliği: en geniş satırın sağ kenarı. */
+/** Text width: the right edge of the widest line. */
 export function textWidthFrom(lines: Line[]): number | null {
   const rights = lines
     .map((l) => l.layoutBounds?.right)
@@ -85,7 +85,7 @@ export function textWidthFrom(lines: Line[]): number | null {
   return rights.length ? +Math.max(...rights).toFixed(4) : null;
 }
 
-/** AGC metin düğümünü ölçüye çevirir. */
+/** Turns an AGC text node into a measurement. */
 export function measureText(node: Record<string, any>): MetinOlcu {
   const ux = node?.meta?.ux ?? {};
   const rs = Array.isArray(ux.rangedStyles) && ux.rangedStyles.length ? ux.rangedStyles[0] : {};
@@ -93,7 +93,7 @@ export function measureText(node: Record<string, any>): MetinOlcu {
   const run = lines[0]?.layoutBounds ? (ux.outlinesLayout?.static?.paragraphs?.[0]?.lines?.[0]?.runs?.[0]?.style ?? {}) : {};
 
   return {
-    // AGC'de metin içeriği düğümün `name` alanında duruyor.
+    // In AGC the text content lives in the node's `name` field.
     metin: typeof node?.name === 'string' ? node.name : '',
     font: {
       aile: rs.fontFamily ?? run.fontFamily ?? null,

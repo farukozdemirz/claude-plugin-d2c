@@ -1,4 +1,4 @@
-/** Bölüm haritası sözleşmesi. */
+/** The section map contract. */
 import { z } from 'zod';
 
 export const SECTIONS_SCHEMA_VERSION = 1;

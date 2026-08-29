@@ -1,4 +1,4 @@
-/** `d2c visual diff` akışı. */
+/** The `d2c visual diff` flow. */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { OlcumSchema, type Olcum } from '../contracts/olcum.js';
@@ -34,7 +34,7 @@ export async function gorselDiff(sec: GorselSecenek): Promise<Visual> {
   mkdirSync(sec.outDir, { recursive: true });
   const notlar: string[] = [];
 
-  // 1) Referans — thumbnail (tarayıcı YOK, ölçek tam biliniyor)
+  // 1) Reference — the thumbnail (NO browser, the scale is known exactly)
   const ref = await olc('referans-indirme', () => referansIndir(sec.xdUrl, sec.screen, join(sec.outDir, `xd-${vp}.png`)));
   if (ref.olcek < 0.9) {
     notlar.push(
@@ -44,7 +44,7 @@ export async function gorselDiff(sec: GorselSecenek): Promise<Visual> {
     );
   }
 
-  // 2) Render — Faz 4'ün tarayıcı katmanı
+  // 2) Render — the browser layer from Phase 4
   const oturum = await tarayiciAc({ cdp: sec.cdp });
   let render: { png: string; kirpma: [number, number, number, number] };
   try {
@@ -57,7 +57,7 @@ export async function gorselDiff(sec: GorselSecenek): Promise<Visual> {
     await oturum.kapat();
   }
 
-  // 3) Karşılaştır + hazır kırpmalar
+  // 3) Compare + ready-made crops
   const d = await olc('piksel-karsilastirma', () => gorselKarsilastir({
     xdPng: ref.png,
     renderPng: render.png,

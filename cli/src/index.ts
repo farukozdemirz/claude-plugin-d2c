@@ -1,4 +1,4 @@
-/** Test ve gömme için iç modüllerin dışa vurumu. */
+/** Internal modules re-exported for tests and embedding. */
 export * from './util/redact.js';
 export * from './util/color.js';
 export * from './contracts/design.js';

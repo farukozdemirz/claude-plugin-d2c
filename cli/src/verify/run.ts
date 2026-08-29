@@ -1,4 +1,4 @@
-/** `d2c render verify` ve `d2c font parity` akışları. */
+/** The `d2c render verify` and `d2c font parity` flows. */
 import { readFileSync } from 'node:fs';
 import { OlcumSchema, type Olcum } from '../contracts/olcum.js';
 import { VERIFICATION_SCHEMA_VERSION, VerificationSchema, type Verification } from '../contracts/verification.js';
@@ -22,8 +22,8 @@ function istekKur(olcum: Olcum, vp: 'desktop' | 'mobil'): OlcumIstek {
   const testidler = [...new Set(olcum.elemanlar.map((e) => e.testid).filter((t): t is string => !!t))];
   const kok = olcum.elemanlar.find((e) => e.rol === 'bolum-zemini' && e.testid)?.testid ?? null;
   const aileler = [...new Set(olcum.stiller.map((s) => s.aile).filter((a): a is string => !!a))];
-  // Her aile/punto çiftine, o stili KULLANAN bir elemanın testid'sini bağla —
-  // font kutusu o elemanın computed ailesiyle ölçülecek (next/font ad değişikliği).
+  // Bind each family/size pair to the testid of an element that USES that style — the
+  // font box is measured with that element's computed family (the next/font name change).
   const ciftler = new Map<string, { aile: string; punto: number; testid?: string | null; renk?: string | null }>();
   for (const s of olcum.stiller) {
     if (!s.aile || !s.punto) continue;
@@ -49,7 +49,7 @@ export function olcumOku(yol: string): Olcum {
   return OlcumSchema.parse(JSON.parse(readFileSync(yol, 'utf8')));
 }
 
-/** `testid` doldurulmamışsa ÖLÇME — uydurma seçici sessizce yanlış sonuç üretir. */
+/** If `testid` was not filled in, DO NOT MEASURE — an invented selector silently produces wrong results. */
 export function testidKontrol(olcum: Olcum): string | null {
   const bos = olcum.elemanlar.filter((e) => e.testid === null);
   if (bos.length === olcum.elemanlar.length) {
@@ -88,7 +88,7 @@ export async function dogrula(sec: DogrulaSecenek): Promise<Verification> {
     const istek = istekKur(olcum, vp);
     const olculen = await olc('olcum', () => sayfayiOlc(oturum.page, istek));
 
-    // Doğru uygulamayı mı açtık? Hiçbir hedef eleman yoksa ÖLÇME.
+    // Did we open the right app? If none of the target elements exist, DO NOT MEASURE.
     const bulunan = Object.values(olculen.elemanlar).filter((e) => e.bulundu).length;
     if (bulunan === 0) {
       throw new Error(

@@ -1,6 +1,6 @@
 /**
- * pngjs kendi tiplerini getirmiyor ve `@types/pngjs` yalnız bunun için ek bir
- * devDependency olurdu. Kullandığımız iki yüzey burada.
+ * pngjs ships no types of its own, and `@types/pngjs` would be an extra devDependency
+ * just for this. The two surfaces we use are declared here.
  */
 declare module 'pngjs' {
   export class PNG {

@@ -1,14 +1,15 @@
-/** `.d2c.json` proje konfigürasyonu. */
+/** The `.d2c.json` project configuration. */
 import { z } from 'zod';
 
 /**
- * Çıkarma stratejisi — geçiş dönemi anahtarı.
+ * Extraction strategy — the transition-period switch.
  *
- *   auto    → ağ yolu denenir; sözleşme bozuksa teşhisle durur (kullanıcı legacy'ye geçebilir)
- *   network → yalnız ağ yolu
- *   legacy  → 1.4.0 davranışı: chrome-devtools MCP + playbook probe yöntemi
+ *   auto    → the network path is tried; if the contract is broken it stops with a
+ *             diagnosis (the user can switch to legacy)
+ *   network → the network path only
+ *   legacy  → 1.4.0 behaviour: chrome-devtools MCP + the playbook probe method
  *
- * `legacy` ilgili migration fazına (M3/Faz 7) kadar **çalışır durumda kalır**.
+ * `legacy` **stays working** until its migration phase (M3/Phase 7).
  */
 export const ExtractorStrategySchema = z.enum(['auto', 'network', 'legacy']).default('auto');
 

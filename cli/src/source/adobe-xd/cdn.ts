@@ -1,15 +1,15 @@
 /**
- * CDN bileşen indirmesi.
+ * CDN component download.
  *
- * POC-1'de doğrulanan URL sözleşmesi — bu detaylar deneme yanılmayla bulundu,
- * değiştirmeden önce ölçün:
+ * The URL contract verified in POC-1 — these details were found by trial and error,
+ * measure before changing them:
  *   {base};revision=0?component_id=<id>&api_key=CometServer1&access_token=<tok>
  *
- *   · `;revision=0` ZORUNLU — yoksa 400
- *   · `component_id` çalışır
- *   · `component_path` 400 döner — kullanmayın
+ *   · `;revision=0` is MANDATORY — without it you get a 400
+ *   · `component_id` works
+ *   · `component_path` returns 400 — do not use it
  *
- * Hata mesajlarında URL redakte edilir (Kural 2).
+ * URLs are redacted in error messages (Rule 2).
  */
 import { redactUrl, redactedError } from '../../util/redact.js';
 import type { PrototypeData } from './share.js';
@@ -21,7 +21,7 @@ export const CONTENT_TYPES = {
   interactions: 'application/vnd.adobe.uxdesign.interactions+json',
 } as const;
 
-/** `linkTemplate`'ten bileşen URL'i kurar. */
+/** Builds a component URL from the `linkTemplate`. */
 export function componentUrl(proto: PrototypeData, componentId: string, revision = 0): string {
   const base = proto.linkTemplate.href.split('{')[0]!;
   const q = new URLSearchParams({
@@ -32,7 +32,7 @@ export function componentUrl(proto: PrototypeData, componentId: string, revision
   return `${base};revision=${revision}?${q.toString()}`;
 }
 
-/** Bileşeni JSON olarak indirir; `expectType` verilirse content-type doğrulanır. */
+/** Downloads a component as JSON; if `expectType` is given, the content-type is verified. */
 export async function fetchComponentJson<T = unknown>(
   proto: PrototypeData,
   componentId: string,

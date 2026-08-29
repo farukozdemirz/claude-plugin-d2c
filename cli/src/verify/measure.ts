@@ -1,11 +1,11 @@
 /**
- * Render ölçümü — `design-diff` ajanının tarayıcı işinin tamamı.
+ * Render measurement — the whole browser job of the `design-diff` agent.
  *
- * Ajanın §2 ve §3 adımları buraya taşındı; davranış birebir korunuyor:
+ * Steps §2 and §3 of the agent moved here; the behaviour is preserved exactly:
  *   · `getBoundingClientRect` + `getComputedStyle`
- *   · renkler BÜYÜK HARF hex'e çevrilir
- *   · tekrar eden elemanlarda aradaki boşluk + adet
- *   · font yüklü mü — **canvas genişlik karşılaştırması**, `fonts.check` DEĞİL
+ *   · colours are converted to UPPERCASE hex
+ *   · for repeated elements, the gap between them + the count
+ *   · whether the font is loaded — a **canvas width comparison**, NOT `fonts.check`
  */
 import type { Page } from 'playwright-core';
 
@@ -13,14 +13,14 @@ export interface ElemanOlcum {
   bulundu: boolean;
   adet: number;
   x: number; y: number; w: number; h: number;
-  /** Bölüm köküne göre y — mutlak konum karşılaştırılmaz (design-diff notu). */
+  /** y relative to the section root — absolute positions are never compared (design-diff note). */
   yRel: number | null;
   padding: string; gap: string; rowGap: string; columnGap: string;
   radius: string; border: string;
   font: string; fontSize: string; lineHeight: string; fontWeight: string;
   fontFamily: string; letterSpacing: string;
   color: string; background: string;
-  /** Tekrar eden elemanlarda ilk ikisi arasındaki boşluk. */
+  /** For repeated elements, the gap between the first two. */
   aralikYatay: number | null;
   aralikDikey: number | null;
 }
@@ -31,11 +31,11 @@ export interface SayfaOlcum {
   yatayTasma: boolean;
   fontlar: Array<{ aile: string; cozulmusAile: string; yuklu: boolean; api: boolean }>;
   /**
-   * Font kutuları — ELEMANIN COMPUTED ailesiyle ölçülür.
+   * Font boxes — measured with the ELEMENT'S COMPUTED family.
    *
-   * `next/font/local` üretilen aile adını değiştiriyor (`Bw Modelica` → `bwModelica`);
-   * XD'deki adla ölçmek Arial'ın metriklerini verir (troubleshooting.md'de kayıtlı).
-   * `cozulmusAile` gerçekte render edilen ailedir.
+   * `next/font/local` changes the generated family name (`Bw Modelica` → `bwModelica`);
+   * measuring with the XD name yields Arial's metrics (recorded in troubleshooting.md).
+   * `cozulmusAile` is the family actually rendered.
    */
   fontKutulari: Array<{
     aile: string; cozulmusAile: string; punto: number;
@@ -46,21 +46,21 @@ export interface SayfaOlcum {
 
 export interface OlcumIstek {
   testidler: string[];
-  /** Göreli y için kök eleman (genelde bölümün kendisi). */
+  /** The root element for relative y (usually the section itself). */
   kokTestid?: string | null;
   aileler: string[];
   /**
-   * POC-4 girdisi. `testid` verilirse o elemanın COMPUTED font ailesiyle ölçülür —
-   * `next/font/local` ad değişikliği bu şekilde aşılır.
+   * POC-4 input. If a `testid` is given, measurement uses that element's COMPUTED font
+   * family — this is how the `next/font/local` name change is worked around.
    */
   fontCiftleri: Array<{ aile: string; punto: number; testid?: string | null; renk?: string | null }>;
 }
 
 /**
- * Sayfayı ölçer — TEK `page.evaluate`.
+ * Measures the page — a SINGLE `page.evaluate`.
  *
- * Tek çağrı olması önemli: eski akışta ayrı `navigate` + `emulate` + `evaluate`
- * üç araç çağrısı ≈ 45 sn demekti. Burada tek round-trip.
+ * Being one call matters: in the old flow a separate `navigate` + `emulate` + `evaluate`
+ * meant three tool calls ≈ 45 s. Here it is one round-trip.
  */
 export async function sayfayiOlc(page: Page, istek: OlcumIstek): Promise<SayfaOlcum> {
   await page.evaluate(() => document.fonts.ready);
@@ -78,12 +78,12 @@ export async function sayfayiOlc(page: Page, istek: OlcumIstek): Promise<SayfaOl
     };
 
     /**
-     * Font gerçekten yüklü mü?
+     * Is the font really loaded?
      *
-     * `document.fonts.check()` KULLANILMAZ — fallback varken de `true` döner
-     * (troubleshooting.md'de kayıtlı: Bw Modelica ve Helvetica Neue için yanlış
-     * pozitif verdi). Bunun yerine metin genişliği bilinen fallback'lerle
-     * karşılaştırılır: aile gerçekten yüklüyse genişlikler farklı çıkar.
+     * `document.fonts.check()` is NOT used — it returns `true` even with a fallback in
+     * place (recorded in troubleshooting.md: it gave a false positive for both
+     * Bw Modelica and Helvetica Neue). Instead, text width is compared against known
+     * fallbacks: if the family really is loaded, the widths differ.
      */
     const fontYuklu = (aile: string) => {
       const ctx = document.createElement('canvas').getContext('2d')!;
@@ -99,14 +99,14 @@ export async function sayfayiOlc(page: Page, istek: OlcumIstek): Promise<SayfaOl
     const hexOf = (el: Element) => hex(getComputedStyle(el).color);
 
     /**
-     * XD aile adını, sayfada GERÇEKTE render edilen aileye çözer.
+     * Resolves the XD family name to the family ACTUALLY rendered on the page.
      *
-     * `next/font/local` üretilen adı değiştiriyor (`Bw Modelica` → `bwModelica`);
-     * XD adıyla ölçmek fallback'in (Arial) metriklerini verir — troubleshooting.md'de
-     * kayıtlı tuzak. Eşleme iki yoldan denenir:
-     *   1. `testid` verildiyse o eleman (en güvenilir)
-     *   2. punto + renk eşleşen ilk eleman — ikisi birlikte güçlü ayırt edici
-     * Hiçbiri tutmazsa XD adı olduğu gibi kullanılır ve bu ÇÖZÜLEMEDİ demektir.
+     * `next/font/local` changes the generated name (`Bw Modelica` → `bwModelica`);
+     * measuring with the XD name yields the fallback's (Arial's) metrics — a trap
+     * recorded in troubleshooting.md. The mapping is attempted two ways:
+     *   1. the element given by `testid` (most reliable)
+     *   2. the first element matching on size + colour — together a strong discriminator
+     * If neither holds, the XD name is used as is, and that means UNRESOLVED.
      */
     const cozumleAile = (
       testid: string | null | undefined,
@@ -196,7 +196,7 @@ export async function sayfayiOlc(page: Page, istek: OlcumIstek): Promise<SayfaOl
       baslik: document.title,
       innerWidth: window.innerWidth,
       yatayTasma: document.documentElement.scrollWidth > window.innerWidth,
-      // Font yüklülük kontrolü de ÇÖZÜLMÜŞ adla yapılır (aynı sebep).
+      // The font-loaded check also uses the RESOLVED name (same reason).
       fontlar: arg.aileler.map((a) => {
         const cift = arg.fontCiftleri.find((c) => c.aile === a);
         const cozulmus = cozumleAile(cift?.testid, a, cift?.punto, cift?.renk);
@@ -208,7 +208,7 @@ export async function sayfayiOlc(page: Page, istek: OlcumIstek): Promise<SayfaOl
   }, istek);
 }
 
-/** Doğru uygulamayı mı açtık? Beklenen seçici yoksa ÖLÇME. */
+/** Did we open the right app? If the expected selector is missing, DO NOT MEASURE. */
 export async function uygulamaTeyit(page: Page, beklenenTestid: string): Promise<{ ok: boolean; baslik: string }> {
   return page.evaluate((tid: string) => ({
     ok: !!document.querySelector(`[data-testid="${tid}"]`),

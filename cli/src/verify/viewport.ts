@@ -1,13 +1,13 @@
 /**
- * Viewport ayarı + DOĞRULAMA.
+ * Viewport setup + VERIFICATION.
  *
- * `troubleshooting.md`'nin iki kayıtlı tuzağı burada kodlanıyor:
+ * Two traps recorded in `troubleshooting.md` are encoded here:
  *
- * 1. **Kaydırma çubuğu layout'u daraltır.** Sayfa dikeyde taşıyorsa klasik kaydırma
- *    çubuğu ~15 px yer kaplar: 1440'lık pencerede layout genişliği 1425 olur ve
- *    1312'lik bar 1297 çıkar. Telafi için geniş emüle edilir ve **doğrulanır**.
- * 2. **Doğrulama tutmazsa ÖLÇÜLMEZ.** Sessizce yanlış viewport'ta ölçmek, mobil
- *    ölçümü desktop ölçümü sanmaya kadar gider.
+ * 1. **The scrollbar narrows the layout.** If the page overflows vertically, the classic
+ *    scrollbar takes ~15 px: in a 1440 window the layout width becomes 1425 and a 1312
+ *    bar reads 1297. To compensate we emulate wider and **verify**.
+ * 2. **If the verification fails, WE DO NOT MEASURE.** Silently measuring at the wrong
+ *    viewport leads all the way to mistaking a mobile measurement for a desktop one.
  */
 import type { Page } from 'playwright-core';
 
@@ -18,7 +18,7 @@ export interface ViewportSonuc {
   dogrulandi: boolean;
 }
 
-/** Chrome'un klasik kaydırma çubuğu genişliği (ölçülen: ~15 px). */
+/** The width of Chrome's classic scrollbar (measured: ~15 px). */
 const SCROLLBAR = 15;
 
 export async function viewportAyarla(
@@ -26,14 +26,14 @@ export async function viewportAyarla(
   hedefGenislik: number,
   yukseklik = 1000
 ): Promise<ViewportSonuc> {
-  // Önce hedef genişlikte dene; dikey taşma varsa telafi gerekir.
+  // Try the target width first; compensation is needed only if it overflows vertically.
   await page.setViewportSize({ width: hedefGenislik, height: yukseklik });
   await page.waitForTimeout(50);
   let cw = await page.evaluate(() => document.documentElement.clientWidth);
   let emule = hedefGenislik;
 
   if (cw !== hedefGenislik) {
-    // Kaydırma çubuğu yemiş: telafi et.
+    // The scrollbar ate into it: compensate.
     emule = hedefGenislik + SCROLLBAR;
     await page.setViewportSize({ width: emule, height: yukseklik });
     await page.waitForTimeout(50);

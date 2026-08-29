@@ -1,22 +1,22 @@
 /**
- * Piksel katmanı — PIL uyumlu.
+ * Pixel layer — PIL compatible.
  *
- * Faz 5b'nin tek zor kısmı burası. `visual-diff.py`'ın YAPISAL yüzdesi 4× LANCZOS
- * küçültmeden çıkıyor; farklı bir yeniden örnekleyici yüzdeyi kaydırır ve port
- * sessiz bir gerileme olur. Bu yüzden "bir Lanczos" değil, Pillow'un `Resample.c`
- * içindeki uygulama birebir izlendi:
+ * This is the only hard part of Phase 5b. The STRUCTURAL percentage of
+ * `visual-diff.py` comes out of a 4× LANCZOS downscale; a different resampler shifts
+ * that percentage and the port becomes a silent regression. So this is not "a Lanczos"
+ * but a line-by-line port of Pillow's implementation in `Resample.c`:
  *
- *   - `precompute_coeffs` — küçültmede pencere `support × ölçek` kadar genişler
- *   - `normalize_coeffs_8bpc` — katsayılar 22 bitlik sabit noktaya yuvarlanır
- *   - iki geçiş: önce yatay, sonra dikey; **aradaki görüntü 8 bit'e iner**
+ *   - `precompute_coeffs` — when downscaling, the window widens by `support × scale`
+ *   - `normalize_coeffs_8bpc` — coefficients are rounded to 22-bit fixed point
+ *   - two passes: horizontal first, then vertical; **the intermediate drops to 8 bit**
  *
- * Son madde önemli: ara sonucu float tutmak "daha doğru" olurdu ama PIL'den
- * ayrılırdı. Amaç doğruluk değil, **eşdeğerlik**.
+ * That last point matters: keeping the intermediate as float would be "more accurate"
+ * but would diverge from PIL. The goal is not accuracy, it is **equivalence**.
  */
 import { PNG } from 'pngjs';
 import { readFileSync, writeFileSync } from 'node:fs';
 
-/** 3 bayt/piksel RGB — PIL'in `convert("RGB")` sonrası hâli. */
+/** 3 bytes/pixel RGB — what PIL's `convert("RGB")` produces. */
 export interface Img {
   w: number;
   h: number;
@@ -28,10 +28,10 @@ export function bosImg(w: number, h: number): Img {
 }
 
 /**
- * PNG oku → RGB.
+ * Read a PNG → RGB.
  *
- * PIL'in `convert("RGB")`'si RGBA'da alfayı **beyaza yedirmez, atar**. pngjs da
- * her formatı RGBA'ya açtığı için alfa kanalını atmak ikisini eşitliyor.
+ * PIL's `convert("RGB")` **does not composite alpha onto white, it drops it**. Since
+ * pngjs expands every format to RGBA, discarding the alpha channel makes the two match.
  */
 export function pngOku(yol: string): Img {
   const png = PNG.sync.read(readFileSync(yol));
@@ -55,7 +55,7 @@ export function pngYaz(yol: string, im: Img): void {
   writeFileSync(yol, PNG.sync.write(png));
 }
 
-/** PIL `Image.crop` — sınır dışı kalan alan **siyahla** doldurulur (PIL de öyle yapar). */
+/** PIL `Image.crop` — area outside the bounds is filled with **black** (PIL does the same). */
 export function kirp(src: Img, x0: number, y0: number, x1: number, y1: number): Img {
   const w = Math.max(0, x1 - x0);
   const h = Math.max(0, y1 - y0);
@@ -76,7 +76,7 @@ export function kirp(src: Img, x0: number, y0: number, x1: number, y1: number): 
   return out;
 }
 
-/** PIL `convert("L")` — ITU-R 601-2, Pillow'un tamsayı katsayılarıyla. */
+/** PIL `convert("L")` — ITU-R 601-2, with Pillow's integer coefficients. */
 export function luma(r: number, g: number, b: number): number {
   return (r * 19595 + g * 38470 + b * 7471 + 0x8000) >> 16;
 }
@@ -95,7 +95,7 @@ function sinc(x: number): number {
 }
 
 function lanczos(x: number): number {
-  // Pillow'daki aralık asimetrik: [-3, 3). Simetrik yazmak uç katsayıyı değiştirir.
+  // Pillow's range is asymmetric: [-3, 3). Writing it symmetrically changes the edge coefficient.
   if (x >= -DESTEK && x < DESTEK) return sinc(x) * sinc(x / DESTEK);
   return 0;
 }
@@ -109,8 +109,8 @@ interface Katsayi {
 /** Pillow `precompute_coeffs` + `normalize_coeffs_8bpc`. */
 function katsayilar(inSize: number, outSize: number): Katsayi {
   const olcek = inSize / outSize;
-  // Küçültürken filtre penceresi ölçekle GENİŞLER; bu adım atlanırsa küçültme
-  // takma ada uğrar ve yapısal yüzde kayar.
+  // When downscaling, the filter window WIDENS with the scale; skipping this makes the
+  // downscale alias and shifts the structural percentage.
   const filtreOlcek = olcek < 1 ? 1 : olcek;
   const destek = DESTEK * filtreOlcek;
   const ksize = Math.ceil(destek) * 2 + 1;
@@ -121,7 +121,7 @@ function katsayilar(inSize: number, outSize: number): Katsayi {
 
   for (let xx = 0; xx < outSize; xx++) {
     const merkez = (xx + 0.5) * olcek;
-    // C'deki `(int)` sıfıra doğru kırpar — Math.floor DEĞİL.
+    // C's `(int)` truncates toward zero — NOT Math.floor.
     let xmin = Math.trunc(merkez - destek + 0.5);
     if (xmin < 0) xmin = 0;
     let xmax = Math.trunc(merkez + destek + 0.5);
@@ -148,7 +148,7 @@ function katsayilar(inSize: number, outSize: number): Katsayi {
   return { ksize, sinir, kk };
 }
 
-/** Pillow `clip8` — 22 bit kaydır, 0-255'e sıkıştır. */
+/** Pillow `clip8` — shift 22 bits, clamp to 0-255. */
 function clip8(v: number): number {
   const s = v >> PRECISION_BITS;
   return s < 0 ? 0 : s > 255 ? 255 : s;
@@ -208,8 +208,8 @@ function dikey(src: Img, outH: number): Img {
 /**
  * PIL `Image.resize(..., Image.LANCZOS)`.
  *
- * Boyut aynıysa PIL kopya döndürür ve yeniden örneklemez — o kısayol da taşındı,
- * yoksa `--olcekle` yolunda gereksiz bir bulanıklık farkı doğardı.
+ * When the size is unchanged PIL returns a copy and does not resample — that shortcut
+ * was ported too, otherwise the `--olcekle` path would introduce needless blur.
  */
 export function olcekle(src: Img, outW: number, outH: number): Img {
   if (src.w === outW && src.h === outH) {
@@ -221,11 +221,11 @@ export function olcekle(src: Img, outW: number, outH: number): Img {
   return cur;
 }
 
-/** PIL `Image.resize(..., Image.NEAREST)` — yalnız kırpmaları büyütmek için. */
+/** PIL `Image.resize(..., Image.NEAREST)` — only for enlarging crops. */
 export function nearest(src: Img, outW: number, outH: number): Img {
   const out = bosImg(outW, outH);
   for (let y = 0; y < outH; y++) {
-    // PIL'in NEAREST'i affine ters dönüşümü kullanır: floor((y + 0.5) * sy).
+    // PIL's NEAREST uses the inverse affine transform: floor((y + 0.5) * sy).
     const sy = Math.min(src.h - 1, Math.floor(((y + 0.5) * src.h) / outH));
     for (let x = 0; x < outW; x++) {
       const sx = Math.min(src.w - 1, Math.floor(((x + 0.5) * src.w) / outW));

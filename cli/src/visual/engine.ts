@@ -1,13 +1,13 @@
 /**
- * `visual-diff.py`'ın TypeScript karşılığı.
+ * The TypeScript counterpart of `visual-diff.py`.
  *
- * Python dosyası SİLİNMİYOR: `--kalibre` çapa mantığı (renk bloğu arama + oran
- * eşleştirme) bilerek taşınmadı — thumbnail referansında ölçek tam bilindiği için
- * çapa türetmeye gerek kalmadı. Çapa gerektiren bir durum çıkarsa Python yolu
- * `--motor python` ile hâlâ orada.
+ * The Python file is NOT DELETED: the `--kalibre` anchor logic (colour block search +
+ * ratio matching) was deliberately not ported — with a thumbnail reference the scale is
+ * known exactly, so there is no need to derive an anchor. If a case does require one,
+ * the Python path is still there via `--motor python`.
  *
- * Taşınan her adım Python'daki sırayı ve **yuvarlama davranışını** izliyor;
- * `test/parity.test.mjs` ikisini aynı girdilerde çalıştırıp karşılaştırıyor.
+ * Every ported step follows the Python order and its **rounding behaviour**;
+ * `test/parity.test.mjs` runs both on the same inputs and compares them.
  */
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -48,8 +48,8 @@ export interface MotorSonuc {
 }
 
 /**
- * Python'un `round()`'u — bankacı yuvarlaması (yarımlar ÇİFTE gider).
- * `Math.round` yarımları yukarı atar; kırpma sınırlarında 1px kayma yaratırdı.
+ * Python's `round()` — banker's rounding (halves go to EVEN).
+ * `Math.round` rounds halves up; that would cause a 1px shift at crop boundaries.
  */
 export function pyRound(v: number): number {
   const f = Math.floor(v);
@@ -98,8 +98,8 @@ function renkKutusu(im: Img, rgb: [number, number, number], tol = 40) {
 }
 
 /**
- * Python `trim_uniform` — köşe pikselinden farklı olan bölgeye kırpar.
- * Luma üzerinden çalışıyor; çok küçük mavi farkları PIL'de de eriyor, burada da.
+ * Python `trim_uniform` — crops to the region differing from the corner pixel.
+ * It works on luma; very small blue differences dissolve in PIL too, and here as well.
  */
 function tekDuzeKirp(im: Img): Img {
   const br = im.data[0]!, bg = im.data[1]!, bb = im.data[2]!;
@@ -212,8 +212,8 @@ export function motorCalistir(sec: MotorSecenek): MotorSonuc {
   yaz(`ortalama fark : ${(toplamFark / toplam).toFixed(2)} / 255`);
   yaz(`ham farklı piksel : ${farkli} / ${toplam}  =  ${oranFarkli.toFixed(2)}%   (eşik ${tol})`);
 
-  // YAPISAL: küçültüp karşılaştır. Metin kenar yumuşatması ve yarım piksel kaymalar
-  // ortalamada erir; eksik görsel, yanlış ikon, fazladan ellipsis gibi farklar kalır.
+  // STRUCTURAL: downscale and compare. Text antialiasing and half-pixel shifts dissolve
+  // into the average; a missing image, a wrong icon or an extra ellipsis survive.
   const sw = Math.max(1, Math.floor(W / yapisalK));
   const sh = Math.max(1, Math.floor(H / yapisalK));
   const sA = resize(A, sw, sh);
@@ -239,8 +239,9 @@ export function motorCalistir(sec: MotorSecenek): MotorSonuc {
   kullan: bir düzeltmeden sonra düşüyorsa iyi. Asıl çıktı aşağıdaki sapan bölgeler ve
   görsel dosyadır — onlara BAKILMADAN karar verilmez.`);
 
-  // Python `sorted(..., reverse=True)` demetleri sözlüksel sıralar: eşit yüzdede
-  // önce büyük satır, sonra büyük sütun gelir. Bölge sırası aynı kalsın diye aynen.
+  // Python's `sorted(..., reverse=True)` orders tuples lexicographically: on equal
+  // percentages the larger row comes first, then the larger column. Kept as is so the
+  // region order stays identical.
   const hucre = gw * gh;
   const kotu: Array<[number, number, number]> = [];
   for (let r = 0; r < izgara; r++) {
@@ -296,9 +297,9 @@ export function motorCalistir(sec: MotorSecenek): MotorSonuc {
     );
   }
 
-  // görsel çıktı: XD | render | ısı haritası
-  // PIL: `diff.convert("L").point(...)` — luma, MAX KANAL DEĞİL. İkisi farklı
-  // gri tonlar üretir; ısı haritası da parite kapsamında olduğu için luma.
+  // visual output: XD | render | heat map
+  // PIL: `diff.convert("L").point(...)` — luma, NOT THE MAX CHANNEL. The two produce
+  // different greys; since the heat map is also in scope for parity, luma it is.
   const heat = bosImg(W, H);
   for (let i = 0; i < toplam; i++) {
     const p = i * 3;

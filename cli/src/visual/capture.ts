@@ -1,19 +1,19 @@
 /**
- * Referans ve render yakalama.
+ * Reference and render capture.
  *
- * REFERANS — POC-3 sonucu: manifest'teki `thumbnail` bileşeni kullanılıyor.
+ * REFERENCE — the POC-3 result: the `thumbnail` component from the manifest is used.
  *
- *   · HTTP ile iner, **tarayıcı gerekmez**
- *   · Ölçek **tam 0,5** (ölçüldü: 1440×3778 → 720×1889, 375×4164 → 188×2082)
- *   · Eşleme kesin biliniyor → **kalibrasyon çapası türetilmiyor**
+ *   · downloaded over HTTP, **no browser needed**
+ *   · the scale is **exactly 0.5** (measured: 1440×3778 → 720×1889, 375×4164 → 188×2082)
+ *   · the mapping is known exactly → **no calibration anchor is derived**
  *
- * Eski akış bu adımı dpr2 + zoom %50 ile tarayıcıdan yakalıyor ve çapayı
- * `--kalibre` ile türetiyordu; ölçülen maliyet çapa türetildiğinde 19 dk,
- * hazır verildiğinde 10 dk. Burada ikisi de gerekmiyor.
+ * The old flow captured this step from the browser at dpr2 + zoom 50% and derived the
+ * anchor with `--kalibre`; the measured cost was 19 min when the anchor was derived and
+ * 10 min when it was provided. Here neither is needed.
  *
- * BEDELİ: yarı çözünürlük. POC-3'te bilinen bulgu sınıfı (ellipsis) yarı ölçekte
- * doğru hücrede lokalize edildi. Tam çözünürlük gerekirse `--kalibre` yolu
- * `visual-diff.py`'da **korunuyor**.
+ * THE PRICE: half resolution. In POC-3 the known finding class (an ellipsis) was still
+ * localised to the correct cell at half scale. If full resolution is required, the
+ * `--kalibre` path is **preserved** in `visual-diff.py`.
  */
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -26,7 +26,7 @@ export interface ReferansSonuc {
   kaynak: 'thumbnail' | 'tarayici';
   png: string;
   olcek: number;
-  /** Artboard'ın tasarım boyutu. */
+  /** The artboard's design size. */
   tasarim: [number, number];
 }
 
@@ -38,7 +38,7 @@ function artboardBul(proto: PrototypeData, key: string): Artboard {
   return ab;
 }
 
-/** Artboard thumbnail'ını indirir ve ölçeği DOĞRULAR. */
+/** Downloads the artboard thumbnail and VERIFIES the scale. */
 export async function referansIndir(
   url: string,
   screenKey: string,
@@ -66,7 +66,7 @@ export async function referansIndir(
   if (!boyut) throw redactedError('thumbnail PNG başlığı okunamadı');
   const sx = boyut.w / ab.bounds.width;
   const sy = boyut.h / ab.bounds.height;
-  // Ölçek iki eksende AYNI olmalı; değilse eşleme güvenilmez ve ölçmeyiz.
+  // The scale must be the SAME on both axes; otherwise the mapping is unreliable and we do not measure.
   if (Math.abs(sx - sy) > 0.005) {
     throw redactedError(
       `thumbnail ölçeği eksenler arasında tutarsız: x ${sx.toFixed(4)} · y ${sy.toFixed(4)}.\n` +
@@ -81,13 +81,13 @@ export async function referansIndir(
   };
 }
 
-/** PNG IHDR'den genişlik/yükseklik — ek bağımlılık olmadan. */
+/** Width/height from the PNG IHDR — without an extra dependency. */
 export function pngBoyutu(buf: Buffer): { w: number; h: number } | null {
   if (buf.length < 24 || buf.readUInt32BE(0) !== 0x89504e47) return null;
   return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
 }
 
-/** Render'ı yakalar — seçicinin kutusu kırpma kutusu olur. */
+/** Captures the render — the selector's box becomes the crop box. */
 export async function renderYakala(
   page: Page,
   testid: string,
@@ -102,7 +102,7 @@ export async function renderYakala(
   const kutu = await el.boundingBox();
   if (!kutu) throw redactedError(`"${testid}" görünür değil (boundingBox yok).`);
   mkdirSync(dirname(hedefPng), { recursive: true });
-  // `fullPage` KULLANILMAZ — sayfayı yeniden diziyor (troubleshooting.md).
+  // `fullPage` is NOT USED — it re-lays out the page (troubleshooting.md).
   await el.screenshot({ path: hedefPng });
   return {
     png: hedefPng,

@@ -1,14 +1,15 @@
 /**
- * Görsel karşılaştırma — motor seçimi.
+ * Visual comparison — engine selection.
  *
- * Faz 5b'de hesaplama TypeScript'e taşındı (`engine.ts`) ve piksel düzeyinde
- * PIL ile eşdeğerliği kanıtlandı. Python script'i **silinmedi**:
+ * In Phase 5b the computation moved to TypeScript (`engine.ts`) and its equivalence
+ * with PIL was proven at the pixel level. The Python script was **not deleted**:
  *
- *   - `--kalibre` çapa mantığı bilerek taşınmadı; ölçek bilinmediğinde tek yol o.
- *   - `--motor python` her zaman elde: TS motorundan şüphe edilirse geri dönülür.
+ *   - the `--kalibre` anchor logic was deliberately not ported; it is the only way when
+ *     the scale is unknown.
+ *   - `--motor python` is always at hand: fall back if the TS engine is in doubt.
  *
- * `kalibre` verildiğinde motor otomatik olarak Python'a düşer — sessizce yanlış
- * sonuç üretmektense bilinen yolu kullanmak doğrusu.
+ * When `kalibre` is given the engine falls back to Python automatically — using the
+ * known path is right, rather than silently producing a wrong result.
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
@@ -21,13 +22,13 @@ export interface DiffSecenek {
   xdPng: string;
   renderPng: string;
   outDir: string;
-  /** XD görüntüsünden kırpılacak TASARIM kutusu (thumbnail ölçeği uygulanır). */
+  /** The DESIGN box to crop from the XD image (the thumbnail scale is applied). */
   tasarimKutu?: [number, number, number, number];
-  /** Referans PNG'nin tasarım→piksel ölçeği (thumbnail'da tam 0,5). */
+  /** The reference PNG's design→pixel scale (exactly 0.5 for a thumbnail). */
   olcek?: number;
-  /** Render'dan kırpılacak piksel kutusu. */
+  /** The pixel box to crop from the render. */
   renderKutu?: [number, number, number, number];
-  /** Çapa mekanizması — KORUNUYOR, geri dönüş yolu. Yalnız Python motorunda. */
+  /** The anchor mechanism — PRESERVED, a fallback path. Python engine only. */
   kalibre?: string;
   kirpmaAdet?: number;
   scriptYolu: string;
@@ -50,7 +51,7 @@ export interface DiffSonuc {
   motor: Motor;
 }
 
-/** Tasarım kutusu + bilinen ölçek → referans PNG'deki piksel kutusu. */
+/** Design box + known scale → the pixel box in the reference PNG. */
 function xdPikselKutu(sec: DiffSecenek): [number, number, number, number] | undefined {
   if (sec.kalibre || !sec.tasarimKutu || !sec.olcek) return undefined;
   const s = sec.olcek;
@@ -58,18 +59,19 @@ function xdPikselKutu(sec: DiffSecenek): [number, number, number, number] | unde
 }
 
 /**
- * Referans tam çözünürlükte DEĞİLSE render'ı aynı ölçeğe indir.
+ * If the reference is NOT at full resolution, scale the render down to match.
  *
- * Bu, script'in uyardığı "ölçekleme birikimli kaymayı gizler" durumu DEĞİL:
- * buradaki ölçek farkı BİLİNEN ve kasıtlı (thumbnail tam 0,5×). Ölçeklemezsek
- * ikisi ortak minimuma kırpılır ve her şey kayar — ölçüldü: %30 sahte fark.
+ * This is NOT the "scaling hides cumulative drift" case the script warns about: the
+ * scale difference here is KNOWN and deliberate (the thumbnail is exactly 0.5×).
+ * Without scaling, both are cropped to their common minimum and everything shifts —
+ * measured: a 30% fake difference.
  */
 function olcekliMi(sec: DiffSecenek): boolean {
   return !!sec.olcek && Math.abs(sec.olcek - 1) > 0.001 && !sec.kalibre;
 }
 
 export function gorselKarsilastir(sec: DiffSecenek): DiffSonuc {
-  // Çapa yolu yalnız Python'da var; istenmişse motoru zorla.
+  // The anchor path exists only in Python; force the engine if it was requested.
   const motor: Motor = sec.kalibre ? 'python' : (sec.motor ?? 'ts');
   return motor === 'ts' ? tsMotor(sec) : pythonMotor(sec);
 }
@@ -114,7 +116,7 @@ function pythonMotor(sec: DiffSecenek): DiffSonuc {
   } catch (e) {
     const err = e as { stdout?: string; stderr?: string; status?: number };
     stdout = err.stdout ?? '';
-    // Çıkış kodu 1 = yapısal eşik aşıldı; HATA DEĞİL, bulgudur.
+    // Exit code 1 = the structural threshold was exceeded; NOT AN ERROR, a finding.
     if (err.status !== 1) {
       throw new Error(
         `visual-diff.py başarısız (çıkış ${err.status}):\n${err.stderr ?? err.stdout ?? ''}`

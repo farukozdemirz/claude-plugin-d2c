@@ -1,4 +1,4 @@
-/** Adobe XD paylaşım linki adaptörü. */
+/** Adobe XD share link adapter. */
 import { DesignSchema, SCHEMA_VERSION, type Design, type Eleman, type ArtboardOlcu } from '../../contracts/design.js';
 import type { DesignSource, EkranOzeti, Inspection } from '../types.js';
 import { fetchShare, normalizeShareUrl, type Artboard, type PrototypeData } from './share.js';
@@ -7,7 +7,7 @@ import { checkAgc, checkPrototype, type Kontrol } from './contract.js';
 import { flatten, toArtboardBox, type DuzEleman } from './agc.js';
 import { redactedError } from '../../util/redact.js';
 
-/** "Desktop - Ürün Detay" ↔ "Mobil - Ürün Detay" eşleştirmesi için ad normalizasyonu. */
+/** Name normalisation for matching "Desktop - Product Detail" ↔ "Mobile - Product Detail". */
 export function normalizeScreenName(name: string): string {
   return name
     .toLocaleLowerCase('tr')
@@ -19,15 +19,15 @@ export function normalizeScreenName(name: string): string {
 export type Platform = 'desktop' | 'mobil' | 'app' | 'bilinmiyor';
 
 /**
- * `app` AYRI bir platformdur — `mobil` ile birleştirilmez.
+ * `app` is a SEPARATE platform — it is not merged with `mobil`.
  *
- * POC-2'de bulundu: birleştirildiğinde bir desktop artboard'ı, gerçek mobil eşi
- * dururken App varyantıyla eşleşebiliyordu (doğrulanmış: "Desktop Yorumlar - Sipariş
- * Seç" ↔ "App-Mobil - Yorumlar – Sipariş Seç", oysa "Mobil - Yorumlar - Form - Sipariş
- * Seç" eşsiz kalıyordu). Yanlış artboard eşlemek, playbook §19'un önlemeye çalıştığı
- * hatanın ta kendisi.
+ * Found in POC-2: when merged, a desktop artboard could match an App variant while its
+ * real mobile counterpart sat unpaired (verified: "Desktop Yorumlar - Sipariş Seç" ↔
+ * "App-Mobil - Yorumlar – Sipariş Seç", while "Mobil - Yorumlar - Form - Sipariş Seç"
+ * was left unmatched). Pairing the wrong artboard is exactly the error playbook §19
+ * tries to prevent.
  *
- * `app` önce sınanır: "App-Mobil - …" gibi iki jetonu birden taşıyan adlar app sayılır.
+ * `app` is tested first: names carrying both tokens, like "App-Mobil - …", count as app.
  */
 export function platformOf(name: string): Platform {
   const n = name.toLocaleLowerCase('tr');
@@ -37,12 +37,12 @@ export function platformOf(name: string): Platform {
   return 'bilinmiyor';
 }
 
-/** Dar viewport'lar (`mobil` ve `app`) `mobil` yuvasına yazılır. */
+/** Narrow viewports (`mobil` and `app`) are written into the `mobil` slot. */
 function darMi(p: Platform): boolean {
   return p === 'mobil' || p === 'app';
 }
 
-/** Ekran adı veya id'siyle artboard bulur. */
+/** Finds an artboard by screen name or id. */
 function findArtboard(proto: PrototypeData, key: string): Artboard | null {
   const abs = proto.manifest.artboards;
   return (
@@ -55,36 +55,36 @@ function findArtboard(proto: PrototypeData, key: string): Artboard | null {
 }
 
 /**
- * Sondaki sürüm/varyant ekini atar: "… sayfası – 1" → "… sayfası".
- * Yalnız GEVŞEK eşleşmede kullanılır (aşağıya bak).
+ * Drops a trailing version/variant suffix: "… page – 1" → "… page".
+ * Used ONLY in LOOSE matching (see below).
  */
 function stripVariant(normalized: string): string {
   return normalized.replace(/\s+(?:versiyon|version)?\s*\d+$/u, '').trim();
 }
 
 /**
- * Aynı ekranın karşı platformdaki eşini bulur.
+ * Finds the same screen's counterpart on the other platform.
  *
- * İki geçiş: önce tam ad eşleşmesi. Bulunamazsa sürüm eki atılmış gevşek eşleşme —
- * ama YALNIZ tek aday varsa. Birden çok aday varsa eşleştirme YAPILMAZ: yanlış
- * artboard'ı eşlemek, playbook §19'un ("bir artboard'ın değerini diğerine taşıma")
- * önlemeye çalıştığı hatanın ta kendisi olurdu.
+ * Two passes: an exact name match first. If that fails, a loose match with the version
+ * suffix dropped — but ONLY when there is a single candidate. With more than one
+ * candidate NO pairing is made: matching the wrong artboard would be exactly the error
+ * playbook §19 ("do not carry one artboard's value to the other") tries to prevent.
  */
 function findPair(proto: PrototypeData, ab: Artboard): Artboard | null {
   const key = normalizeScreenName(ab.name);
   const plat = platformOf(ab.name);
   if (plat === 'bilinmiyor') return null;
-  // Eşleştirme yalnız desktop ↔ mobil arasında. `app` kendi platformu; otomatik
-  // eşlenmez (kullanıcı ekranı açıkça verebilir).
+  // Pairing happens only between desktop ↔ mobile. `app` is its own platform; it is
+  // not paired automatically (the user can name the screen explicitly).
   const hedef: Platform = plat === 'desktop' ? 'mobil' : 'desktop';
   if (plat === 'app') return null;
   const adaylar = proto.manifest.artboards.filter(
     (a) => a.id !== ab.id && platformOf(a.name) === hedef
   );
 
-  // TAM eşleşmede de BENZERSİZLİK aranır — birden çok aday varsa eşleştirme yapılmaz.
-  // (POC-2: "Fiyat Bilgisi - Desktop" için hem "… - Mobil" hem "… - App" tam eşleşiyordu
-  // ve dizi sırasına göre sessizce biri seçiliyordu.)
+  // UNIQUENESS is required for the exact match too — with more than one candidate no
+  // pairing is made. (POC-2: for "Fiyat Bilgisi - Desktop" both "… - Mobil" and
+  // "… - App" matched exactly, and one was silently picked by array order.)
   const tam = adaylar.filter((a) => normalizeScreenName(a.name) === key);
   if (tam.length === 1) return tam[0]!;
   if (tam.length > 1) return null;
@@ -100,7 +100,7 @@ function primaryComponentId(ab: Artboard): string {
   return c.id;
 }
 
-/** Düz elemanı artboard ölçüsüne çevirir. */
+/** Converts a flattened element into an artboard-relative measurement. */
 function toOlcu(el: DuzEleman, origin: { x: number; y: number }): ArtboardOlcu | null {
   const kutu = toArtboardBox(el, origin);
   if (!kutu) return null;
@@ -127,10 +127,11 @@ function elemanTipi(el: DuzEleman): Eleman['tip'] {
 }
 
 /**
- * Desktop ve mobil elemanlarını eşleştirir.
+ * Pairs desktop and mobile elements.
  *
- * playbook §19: "Bir artboard'da ölçtüğün değeri diğerine taşıma." Eşleştirme yalnız
- * KİMLİK içindir — ölçüler her artboard'dan AYRI okunur, asla türetilmez.
+ * playbook §19: "do not carry a value measured on one artboard to the other." The
+ * pairing is for IDENTITY only — measurements are read SEPARATELY from each artboard,
+ * never derived.
  */
 function pairElements(d: DuzEleman[], m: DuzEleman[]): Array<{ d?: DuzEleman; m?: DuzEleman }> {
   const out: Array<{ d?: DuzEleman; m?: DuzEleman }> = [];
@@ -153,12 +154,13 @@ function pairElements(d: DuzEleman[], m: DuzEleman[]): Array<{ d?: DuzEleman; m?
 }
 
 /**
- * Ağ yerine hazır veri verme noktası.
+ * The injection point for supplying data instead of going to the network.
  *
- * Yalnız test/çevrimdışı içindir ve davranışı değiştirmez: verilmezse her şey
- * eskisi gibi ağdan gelir. Var olma sebebi, kayıtlı AGC fixture'larıyla TAM bir
- * `design.json` üretilebilmesi — bu seam olmadan iki test canlı bir koşudan
- * arta kalan `/tmp` dosyasına bağlıydı ve dosya silinince SESSİZCE atlanıyordu.
+ * For tests/offline only, and it does not change behaviour: when it is not provided,
+ * everything comes from the network as before. It exists so that a COMPLETE
+ * `design.json` can be produced from the recorded AGC fixtures — without this seam two
+ * tests depended on a `/tmp` file left over from a live run, and were SILENTLY skipped
+ * once that file was deleted.
  */
 export interface KaynakSecenek {
   proto?: PrototypeData;
@@ -170,7 +172,7 @@ export class AdobeXdShare implements DesignSource {
   constructor(private readonly url: string, private readonly sec: KaynakSecenek = {}) {}
 
   private async proto_(): Promise<PrototypeData> {
-    // Token ASLA saklanmaz — her AdobeXdShare örneği shell'i taze çeker.
+    // The token is NEVER stored — every AdobeXdShare instance fetches the shell fresh.
     if (this.sec.proto) return this.sec.proto;
     if (!this.proto) this.proto = await fetchShare(this.url);
     return this.proto;
@@ -207,7 +209,7 @@ export class AdobeXdShare implements DesignSource {
     }
     const es = opts.pairMobile === false ? null : findPair(proto, ab);
     const plat = platformOf(ab.name);
-    // Dar viewport'lar (mobil + app) `mobil` yuvasına; diğerleri `desktop` yuvasına.
+    // Narrow viewports (mobile + app) go into the `mobil` slot; the rest into `desktop`.
     const desktopAb = darMi(plat) ? es : ab;
     const mobilAb = darMi(plat) ? ab : es;
 
@@ -243,7 +245,7 @@ export class AdobeXdShare implements DesignSource {
       return e;
     });
 
-    // Palet ve stiller — bu ekranda GEÇENLER (tüm belgenin değil).
+    // Palette and styles — the ones that OCCUR on this screen (not the whole document).
     const paletSayac = new Map<string, number>();
     for (const e of elemanlar) {
       for (const o of [e.desktop, e.mobil]) {

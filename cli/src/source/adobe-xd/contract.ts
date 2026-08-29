@@ -1,15 +1,15 @@
 /**
- * Sözleşme sağlık kontrolü — uzun bir çıkarma başlatmadan önce fail-fast.
+ * Contract health check — fail fast before starting a long extraction.
  *
- * XD viewer private bir implementasyon; sözleşme bozulduğunda SESSİZCE YANLIŞ sonuç
- * üretmek en kötü sonuç olur. Bu yüzden kontroller teşhisle döner.
+ * The XD viewer is a private implementation; producing a SILENTLY WRONG result when the
+ * contract breaks would be the worst outcome. So the checks return a diagnosis.
  */
 import type { PrototypeData } from './share.js';
 
 export type Seviye = 'ok' | 'uyari' | 'hata';
 export interface Kontrol { ad: string; seviye: Seviye; detay: string }
 
-/** Bilinen AGC şema sürümleri. Dışına çıkılırsa uyarı verilir, işlem durmaz. */
+/** Known AGC schema versions. Outside this set a warning is raised, but work continues. */
 export const BILINEN_AGC_SURUMLERI = new Set(['1.5.0']);
 
 export function checkPrototype(proto: PrototypeData): Kontrol[] {
@@ -21,7 +21,7 @@ export function checkPrototype(proto: PrototypeData): Kontrol[] {
   const tok = proto.linkTemplate?.data?.access_token;
   if (!tok) push('access_token', 'hata', 'yok — link özel/parolalı olabilir');
   else {
-    // Token öneki epoch: `<exp>_urn:...`. Süresi geçmişse shell yeniden alınmalı.
+    // The token prefix is an epoch: `<exp>_urn:...`. If it has expired, the shell must be re-fetched.
     const exp = Number(tok.split('_')[0]);
     if (Number.isFinite(exp)) {
       const kalanDk = Math.round((exp * 1000 - Date.now()) / 60000);

@@ -1,9 +1,9 @@
 /**
- * Tasarım kaynağı sınırı.
+ * The design source boundary.
  *
- * Amaç gelecekteki kaynaklar DEĞİL — XD'ye özgü kodu D2C çekirdeğinden ayırmak.
- * `sections/`, `verify/`, `visual/` yalnız bu tipleri görür; `agc`, `prototypeData`,
- * `component_id` gibi kelimeleri hiç bilmez.
+ * The point is NOT future sources — it is separating XD-specific code from the D2C core.
+ * `sections/`, `verify/` and `visual/` see only these types; they never know words like
+ * `agc`, `prototypeData` or `component_id`.
  */
 import type { Design } from '../contracts/design.js';
 import type { Kontrol } from './adobe-xd/contract.js';
@@ -12,7 +12,7 @@ export interface EkranOzeti {
   id: string;
   ad: string;
   boyut: [number, number];
-  /** Aynı ekranın karşı platformdaki eşi (ad benzerliğiyle bulunur). */
+  /** The same screen's counterpart on the other platform (found by name similarity). */
   esId?: string | null;
 }
 

@@ -6201,8 +6201,8 @@ var FontSchema = external_exports.object({
   renk: external_exports.string().nullable(),
   hiza: external_exports.string().nullable(),
   /**
-   * HAM AGC değeri. Chrome `fontBoundingBox` metriği DEĞİLDİR ve M1'de TÜKETİLMEZ.
-   * Parite aile başına M2'de POC-4 ile belirlenir (ana plan M1 kuralı).
+   * The RAW AGC value. It is NOT Chrome's `fontBoundingBox` metric and is NOT consumed
+   * in M1. Parity is decided per family in M2 via POC-4 (the main plan's M1 rule).
    */
   fontKutusuAgc: external_exports.number().nullable(),
   postscript: external_exports.string().nullable().optional()
@@ -6216,7 +6216,7 @@ var ElemanSchema = external_exports.object({
   sira: external_exports.number(),
   metin: external_exports.string().optional(),
   font: FontSchema.optional(),
-  /** Faz 6 (M4) bunu indirecek; M1'de yalnız taşınır. */
+  /** Phase 6 (M4) will download this; in M1 it is only carried. */
   gorselUid: external_exports.string().nullable().optional(),
   olcekDavranisi: external_exports.string().nullable().optional(),
   desktop: ArtboardOlcuSchema.optional(),
@@ -6237,7 +6237,7 @@ var DesignSchema = external_exports.object({
     modifiedDate: external_exports.number().nullable(),
     agcVersion: external_exports.string().nullable(),
     cikarilma: external_exports.string(),
-    /** Sözleşme kontrolünde uyarı çıktıysa burada durur — sessiz geçilmez. */
+    /** If the contract check produced a warning it lands here — it is never passed over silently. */
     uyarilar: external_exports.array(external_exports.string()).default([])
   }),
   ekran: external_exports.object({
@@ -6638,7 +6638,7 @@ function measureShape(shape) {
     return {
       kutu,
       radius: r != null ? [r, r, r, r] : null,
-      // Desen tanınmadıysa UYDURMA — bilinmiyor de.
+      // If the pattern was not recognised, do NOT invent — say unknown.
       radiusKaynak: r != null ? "yol" : "bilinmiyor"
     };
   }
@@ -6679,7 +6679,7 @@ function measureText(node) {
   const lines = flattenLines(ux);
   const run = lines[0]?.layoutBounds ? ux.outlinesLayout?.static?.paragraphs?.[0]?.lines?.[0]?.runs?.[0]?.style ?? {} : {};
   return {
-    // AGC'de metin içeriği düğümün `name` alanında duruyor.
+    // In AGC the text content lives in the node's `name` field.
     metin: typeof node?.name === "string" ? node.name : "",
     font: {
       aile: rs.fontFamily ?? run.fontFamily ?? null,
@@ -6771,7 +6771,7 @@ function flatten(agc) {
           olcu,
           sekilTipi: node.shape?.type ?? "?",
           ...typeof node.shape?.path === "string" && node.shape.path ? { yol: node.shape.path } : {},
-          // `solid`/`none` dışındaki dolgular (gradient…) SVG'ye çevrilemiyor — İŞARETLE.
+          // Fills other than `solid`/`none` (gradient…) cannot be converted to SVG — MARK them.
           ...f && f.type !== "solid" && f.type !== "none" && f.type !== "pattern" ? { desteklenmeyenDolgu: String(f.type) } : {}
         });
       } else bilinmeyen[`shape:${node.shape?.type ?? "?"}`] = (bilinmeyen[`shape:${node.shape?.type ?? "?"}`] ?? 0) + 1;
@@ -7225,11 +7225,11 @@ var FontSchema2 = external_exports.object({
   ls: external_exports.number().nullable(),
   renk: external_exports.string().nullable(),
   hiza: external_exports.string().nullable(),
-  /** HAM AGC değeri. M1'de TÜKETİLMEZ (POC-4, M2). */
+  /** The RAW AGC value. NOT CONSUMED in M1 (POC-4, M2). */
   fontKutusuAgc: external_exports.number().nullable(),
-  /** M1'de her zaman "tarayici": kod fazı mevcut ölçümü sürdürür. */
+  /** Always "tarayici" in M1: the code phase keeps using the existing measurement. */
   fontKutusuKaynak: external_exports.enum(["tarayici", "agc"]),
-  /** M1'de her zaman null — kod fazı tarayıcıda hesaplar. */
+  /** Always null in M1 — the code phase computes it in the browser. */
   yariSatir: external_exports.number().nullable()
 });
 var TekrarSchema = external_exports.object({
@@ -7247,9 +7247,9 @@ var ElemanSchema2 = external_exports.object({
   id: external_exports.string().nullable(),
   ad: external_exports.string().nullable(),
   tip: external_exports.string(),
-  /** Güvenle türetilebilen etiketler; türetilemezse null — uydurulmaz. */
+  /** Labels that can be derived safely; null when they cannot — nothing is invented. */
   rol: external_exports.string().nullable(),
-  /** Kod fazı doldurur. `render verify` çağrılmadan önce dolu olmalı. */
+  /** Filled in by the code phase. Must be populated before `render verify` is called. */
   testid: external_exports.string().nullable(),
   ebeveyn: external_exports.string().nullable(),
   sira: external_exports.number(),
@@ -7264,7 +7264,7 @@ var HesaplananSchema = external_exports.object({
   ne: external_exports.string(),
   desktop: external_exports.number().nullable(),
   mobil: external_exports.number().nullable(),
-  /** Değerin nereden geldiği — playbook §14 disiplini. */
+  /** Where the value came from — the playbook §14 discipline. */
   nasil: external_exports.string()
 });
 var OlcumSchema = external_exports.object({
@@ -7667,10 +7667,11 @@ var FarkSchema = external_exports.object({
   olculen: external_exports.union([external_exports.number(), external_exports.string()]).nullable(),
   fark: external_exports.number().nullable(),
   /**
-   * `gecti`  — tolerans içinde
-   * `kabul`  — bilinen ve kabul edilmiş sapma (sebep zorunlu) · sapan SAYILMAZ ama GİZLENMEZ
-   * `uyari`  — ölçüm güvenilmez (ör. font yüklü değil) · `✗` değil
-   * `sapan`  — gerçek sapma
+   * `gecti`  — within tolerance
+   * `kabul`  — a known and accepted deviation (a reason is mandatory) · NOT counted as a
+   *            deviation, but NEVER HIDDEN
+   * `uyari`  — the measurement is unreliable (e.g. the font is not loaded) · not a `✗`
+   * `sapan`  — a real deviation
    */
   durum: external_exports.enum(["gecti", "kabul", "uyari", "sapan"]),
   sebep: external_exports.string().optional()
@@ -7705,7 +7706,7 @@ var VerificationSchema = external_exports.object({
     uyari: external_exports.number(),
     sapan: external_exports.number()
   }),
-  /** Ölçüm yapılamadıysa sebebi — sessiz başarısızlık yok. */
+  /** If no measurement could be made, the reason — there is no silent failure. */
   durduruldu: external_exports.string().nullable()
 });
 
@@ -7899,7 +7900,7 @@ async function sayfayiOlc(page, istek) {
       baslik: document.title,
       innerWidth: window.innerWidth,
       yatayTasma: document.documentElement.scrollWidth > window.innerWidth,
-      // Font yüklülük kontrolü de ÇÖZÜLMÜŞ adla yapılır (aynı sebep).
+      // The font-loaded check also uses the RESOLVED name (same reason).
       fontlar: arg.aileler.map((a) => {
         const cift = arg.fontCiftleri.find((c) => c.aile === a);
         const cozulmus = cozumleAile(cift?.testid, a, cift?.punto, cift?.renk);
@@ -8114,7 +8115,7 @@ function pariteHesapla(olcum, agcKutulari) {
       agc,
       chrome: fk.kutu,
       fark,
-      // Font yüklü değilse parite BELİRSİZ — eşleşse bile güvenilmez.
+      // If the font is not loaded, parity is UNDETERMINED — unreliable even if it matches.
       parite: yuklu ? parite : null
     });
     if (parite === false) aileHatali.add(fk.aile);
@@ -8262,7 +8263,7 @@ var BolgeSchema = external_exports.object({
   sutun: external_exports.number(),
   yuzde: external_exports.number(),
   kutu: external_exports.tuple([external_exports.number(), external_exports.number(), external_exports.number(), external_exports.number()]),
-  /** Ajanın BAKACAĞI hazır kırpma (XD | render yan yana, büyütülmüş). */
+  /** The ready-made crop the agent will LOOK at (XD | render side by side, enlarged). */
   kirpma: external_exports.string().nullable()
 });
 var VisualSchema = external_exports.object({
@@ -8272,14 +8273,15 @@ var VisualSchema = external_exports.object({
   referans: external_exports.object({
     kaynak: external_exports.enum(["thumbnail", "tarayici"]),
     png: external_exports.string(),
-    /** Tasarım → PNG eşlemesi. Thumbnail'da ölçek TAM bilinir, çapa türetilmez. */
+    /** The design → PNG mapping. With a thumbnail the scale is known EXACTLY, no anchor is derived. */
     olcek: external_exports.number(),
     kirpma: external_exports.tuple([external_exports.number(), external_exports.number(), external_exports.number(), external_exports.number()])
   }),
   render: external_exports.object({ png: external_exports.string(), kirpma: external_exports.tuple([external_exports.number(), external_exports.number(), external_exports.number(), external_exports.number()]) }),
   /**
-   * Yüzdeler GEÇME NOTU DEĞİL. XD metni kendi rasterizer'ıyla, tarayıcı kendi
-   * hinting'iyle çiziyor; metin ağırlıklı bölümde taban %5-10. Göreli kullanılır.
+   * The percentages are NOT A PASS MARK. XD draws text with its own rasterizer and the
+   * browser with its own hinting; in a text-heavy section the floor is 5-10%. Use them
+   * relatively.
    */
   hamYuzde: external_exports.number(),
   yapisalYuzde: external_exports.number(),
@@ -8287,9 +8289,9 @@ var VisualSchema = external_exports.object({
   isiHaritasi: external_exports.string(),
   sureMs: external_exports.number(),
   /**
-   * Sayıları hangi motor üretti. Varsayılan `ts`; `--kalibre` verildiğinde
-   * otomatik `python` olur (çapa mantığı bilerek taşınmadı). Opsiyonel+varsayılan
-   * olduğu için Faz 5b öncesi yazılmış `visual.json` dosyaları hâlâ okunuyor.
+   * Which engine produced the numbers. Defaults to `ts`; becomes `python` automatically
+   * when `--kalibre` is given (the anchor logic was deliberately not ported). Because it
+   * is optional with a default, `visual.json` files written before Phase 5b still parse.
    */
   motor: external_exports.enum(["ts", "python"]).default("ts"),
   notlar: external_exports.array(external_exports.string()).default([])
@@ -23301,7 +23303,7 @@ function dosyayiTara(yol, kok) {
   try {
     const ast = parse(src, {
       sourceType: "module",
-      // `errorRecovery`: tek bir sözdizimi hatası tüm envanteri düşürmesin.
+      // `errorRecovery`: one syntax error must not take down the whole inventory.
       errorRecovery: true,
       plugins: ["typescript", "jsx", "decorators-legacy"]
     });
@@ -23482,8 +23484,8 @@ function svgUret(grup, ad) {
     const attrs = [
       `d="${esc(d)}"`,
       `fill="${f}"`,
-      // Boolean şekil (compound) delik içerebilir; SVG varsayılanı `nonzero` deliği
-      // DOLDURUR. XD'nin `exclude`/`subtract` sonucu ancak evenodd ile doğru çıkar.
+      // A boolean shape (compound) can contain a hole; SVG's default `nonzero` FILLS the
+      // hole. XD's `exclude`/`subtract` result only comes out right with evenodd.
       ...el.sekilTipi === "compound" ? ['fill-rule="evenodd"'] : [],
       ...s ? [`stroke="${s.renk}"`, `stroke-width="${s.genislik}"`] : ['stroke="none"']
     ];

@@ -1,18 +1,18 @@
 /**
- * Bileşen envanteri — "bu zaten var mı?" sorusu için.
+ * Component inventory — for the question "does this already exist?".
  *
- * `component-inventory.py`'ın yerini alır ama onu **silmez**: regex script legacy
- * geri dönüş olarak duruyor.
+ * It replaces `component-inventory.py` but does **not delete** it: the regex script
+ * stays as a legacy fallback.
  *
- * Neden AST: regex sürüm sentetik bir dosyada **5 export biçiminden 1'ini** buldu.
- * `export default function Kart`, `export { Kart as UrunKart }`, `export * from`
- * ve `export { Eski }` görünmüyordu — yani kod fazı "bu bileşen yok" deyip
- * var olanı yeniden yazabilirdi.
+ * Why an AST: on a synthetic file the regex version found **1 of 5 export forms**.
+ * `export default function Card`, `export { Card as ProductCard }`, `export * from`
+ * and `export { Legacy }` were invisible — so the code phase could conclude "this
+ * component does not exist" and rewrite one that did.
  *
- * Parser seçimi ölçüldü: `ts-morph` 13,5 MB bundle (dist commit ediliyor),
- * hedef projenin kendi `typescript`'i TS 7'de kırılıyor (ana giriş yalnız `version`
- * veriyor), `@babel/parser` 0,27 MB ve tam TSX destekli. Sonuncusu seçildi —
- * kullanıcıya yeni kurulum adımı gelmiyor.
+ * The parser choice was measured: `ts-morph` bundles to 13.5 MB (and dist is
+ * committed), the target project's own `typescript` breaks on TS 7 (the main entry
+ * only exposes `version`), while `@babel/parser` is 0.27 MB with full TSX support.
+ * The last one was chosen — no new install step reaches the user.
  */
 import { parse } from '@babel/parser';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
@@ -23,9 +23,9 @@ export interface ExportKaydi {
   /** `fonksiyon` · `sinif` · `degisken` · `yeniden` (re-export) · `hepsi` (`export *`) */
   tur: 'fonksiyon' | 'sinif' | 'degisken' | 'yeniden' | 'hepsi';
   varsayilan: boolean;
-  /** `export type { X }` — bileşen DEĞİL. İşaretlenmezse envanter yanıltır. */
+  /** `export type { X }` — NOT a component. Unmarked, it would mislead the inventory. */
   sadeceTip?: boolean;
-  /** Re-export ise kaynağı. */
+  /** For a re-export, its source. */
   kaynak?: string;
 }
 
@@ -37,14 +37,14 @@ export interface DosyaKaydi {
   olculer: string[];
   radiuslar: string[];
   renkler: string[];
-  /** Parse edilemediyse sebebi — dosya **atlanmaz, raporlanır**. */
+  /** If it could not be parsed, the reason — the file is **not skipped, it is reported**. */
   hata?: string;
 }
 
 export interface Envanter {
   kok: string;
   dosyalar: DosyaKaydi[];
-  /** 3+ dosyada gömülü geçen hex — tema token'ı adayı. */
+  /** A hex embedded in 3+ files — a theme token candidate. */
   tokenAdaylari: Array<{ renk: string; dosyalar: string[] }>;
   hatalar: Array<{ yol: string; hata: string }>;
 }
@@ -63,7 +63,7 @@ function dosyalariBul(kok: string): string[] {
       let st;
       try { st = statSync(tam); } catch { continue; }
       if (st.isDirectory()) gez(tam);
-      // `.d.ts` tip bildirimi; bileşen değil.
+      // A `.d.ts` type declaration; not a component.
       else if (UZANTILAR.has(extname(g)) && !g.endsWith('.d.ts')) bulunan.push(tam);
     }
   };
@@ -71,14 +71,14 @@ function dosyalariBul(kok: string): string[] {
   return bulunan;
 }
 
-/** `export default` sağ tarafı isimsiz olabilir (arrow, anonim sınıf). */
+/** The right-hand side of `export default` can be unnamed (arrow, anonymous class). */
 function varsayilanAd(d: Record<string, any>): string {
   if (d?.id?.name) return d.id.name;
   if (d?.type === 'Identifier') return d.name;
   if (d?.type === 'ArrowFunctionExpression' || d?.type === 'FunctionExpression') return '(anonim fonksiyon)';
   if (d?.type === 'ClassExpression') return '(anonim sınıf)';
   if (d?.type === 'CallExpression') {
-    // `export default memo(Kart)` / `forwardRef(...)` — sarmalanan adı göster.
+    // `export default memo(Card)` / `forwardRef(...)` — show the wrapped name.
     const ic = d.arguments?.[0];
     const sarma = d.callee?.name ?? d.callee?.property?.name ?? 'çağrı';
     const icAd = ic?.name ?? ic?.id?.name;
@@ -104,7 +104,7 @@ function exportlariCikar(gövde: any[]): ExportKaydi[] {
           out.push({ ad: d.id.name, tur: turFromNode(d), varsayilan: false, ...(tip ? { sadeceTip: true } : {}) });
         }
       }
-      // `export type { X }` tüm bildirimi, `export { type X }` tek belirteci işaretler.
+      // `export type { X }` marks the whole declaration, `export { type X }` a single specifier.
       const tipBildirimi = n.exportKind === 'type';
       for (const s of n.specifiers ?? []) {
         // `export * as ns from` babel'de ExportNamespaceSpecifier olarak gelir.
@@ -145,7 +145,7 @@ function turFromNode(d: Record<string, any>): ExportKaydi['tur'] {
   return 'degisken';
 }
 
-/** Dosyanın başındaki JSDoc — bizim ürettiğimiz bileşenlerde XD kaynağını taşır. */
+/** The JSDoc at the top of a file — in components we used to generate it carried the XD source. */
 function bastakiJsdoc(src: string): string | null {
   const m = /^\s*\/\*\*([\s\S]*?)\*\//.exec(src);
   if (!m) return null;
@@ -178,13 +178,13 @@ export function dosyayiTara(yol: string, kok: string): DosyaKaydi {
   try {
     const ast = parse(src, {
       sourceType: 'module',
-      // `errorRecovery`: tek bir sözdizimi hatası tüm envanteri düşürmesin.
+      // `errorRecovery`: one syntax error must not take down the whole inventory.
       errorRecovery: true,
       plugins: ['typescript', 'jsx', 'decorators-legacy'],
     });
     kayit.exportlar = exportlariCikar(ast.program.body);
   } catch (e) {
-    // Sessizce atlamak, "bileşen yok" demekle aynı sonucu verir — SÖYLE.
+    // Skipping silently gives the same outcome as "no component" — SAY SO.
     kayit.hata = e instanceof Error ? e.message.split('\n')[0]! : String(e);
   }
   return kayit;
@@ -215,7 +215,7 @@ export function envanterCikar(kok: string): Envanter {
   };
 }
 
-/** İnsan okunur çıktı — Python script'inin biçimine yakın durur. */
+/** Human-readable output — stays close to the Python script's format. */
 export function envanterYaz(env: Envanter): string {
   const s: string[] = [];
   if (!env.dosyalar.length) return `(bileşen yok: ${env.kok})\n`;

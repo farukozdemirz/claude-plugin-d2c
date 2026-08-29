@@ -1,8 +1,8 @@
 /**
- * design.json sözleşmesi — Zod.
+ * The design.json contract — Zod.
  *
- * Ana plan §8: `design.json` kaynaktan çıkarılmış, SALT OKUNUR, ekran kapsamlı veri.
- * Claude bunu OKUMAZ (Claude sınırı) — yalnız deterministik araçlar tüketir.
+ * Main plan §8: `design.json` is READ-ONLY, screen-scoped data extracted from the source.
+ * Claude does NOT read it (the Claude boundary) — only deterministic tools consume it.
  */
 import { z } from 'zod';
 
@@ -36,8 +36,8 @@ export const FontSchema = z.object({
   renk: z.string().nullable(),
   hiza: z.string().nullable(),
   /**
-   * HAM AGC değeri. Chrome `fontBoundingBox` metriği DEĞİLDİR ve M1'de TÜKETİLMEZ.
-   * Parite aile başına M2'de POC-4 ile belirlenir (ana plan M1 kuralı).
+   * The RAW AGC value. It is NOT Chrome's `fontBoundingBox` metric and is NOT consumed
+   * in M1. Parity is decided per family in M2 via POC-4 (the main plan's M1 rule).
    */
   fontKutusuAgc: z.number().nullable(),
   postscript: z.string().nullable().optional(),
@@ -52,7 +52,7 @@ export const ElemanSchema = z.object({
   sira: z.number(),
   metin: z.string().optional(),
   font: FontSchema.optional(),
-  /** Faz 6 (M4) bunu indirecek; M1'de yalnız taşınır. */
+  /** Phase 6 (M4) will download this; in M1 it is only carried. */
   gorselUid: z.string().nullable().optional(),
   olcekDavranisi: z.string().nullable().optional(),
   desktop: ArtboardOlcuSchema.optional(),
@@ -75,7 +75,7 @@ export const DesignSchema = z.object({
     modifiedDate: z.number().nullable(),
     agcVersion: z.string().nullable(),
     cikarilma: z.string(),
-    /** Sözleşme kontrolünde uyarı çıktıysa burada durur — sessiz geçilmez. */
+    /** If the contract check produced a warning it lands here — it is never passed over silently. */
     uyarilar: z.array(z.string()).default([]),
   }),
   ekran: z.object({
