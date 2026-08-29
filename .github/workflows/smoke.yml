@@ -3,9 +3,15 @@
 # XD viewer private bir implementasyon. Adobe sessizce bir şey değiştirirse bunu
 # bir kullanıcı koşusunda öğrenmek en pahalı yol — amaç önce burada öğrenmek.
 #
-# Link repo değişkeninden gelir (`XD_SMOKE_URL`). TANIMLI DEĞİLSE iş ATLANIR,
-# kırmaz: "link yok" bir sözleşme bozulması değildir ve kırmızı bir CI'nın
-# anlamını aşındırır.
+# Link `XD_SMOKE_URL` SECRET'ından gelir. TANIMLI DEĞİLSE iş ATLANIR, kırmaz:
+# "link yok" bir sözleşme bozulması değildir ve kırmızı bir CI'nın anlamını aşındırır.
+#
+# Neden `vars` değil `secrets`: bu depo herkese açık ve GitHub **değişkenleri
+# maskelemiyor** — link workflow logunda görünür, XD view linki de onu bilen
+# herkese tasarımı açar. Secret'lar loglarda maskelenir.
+#
+# Link ayrıca `env:` ile geçiliyor, `${{ }}` ile komut satırına gömülmüyor:
+# gömülü interpolasyon, içinde `$(...)` geçen bir değerde kabuk enjeksiyonu olur.
 name: smoke
 
 on:
@@ -30,10 +36,12 @@ jobs:
 
       - name: Link tanımlı mı
         id: link
+        env:
+          XD_SMOKE_URL: ${{ secrets.XD_SMOKE_URL }}
         run: |
-          if [ -z "${{ vars.XD_SMOKE_URL }}" ]; then
+          if [ -z "$XD_SMOKE_URL" ]; then
             echo "var=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::XD_SMOKE_URL tanımlı değil — canlı smoke atlandı."
+            echo "::notice::XD_SMOKE_URL secret'ı tanımlı değil — canlı smoke atlandı."
           else
             echo "var=true" >> "$GITHUB_OUTPUT"
           fi
@@ -41,7 +49,9 @@ jobs:
       - name: Sözleşme kontrolü
         if: steps.link.outputs.var == 'true'
         working-directory: cli
-        run: node dist/d2c.mjs xd smoke "${{ vars.XD_SMOKE_URL }}" --json -o smoke.json
+        env:
+          XD_SMOKE_URL: ${{ secrets.XD_SMOKE_URL }}
+        run: node dist/d2c.mjs xd smoke "$XD_SMOKE_URL" --json -o smoke.json
 
       # Çıktıda token yoktur (`smoke.ts` redakte eder, testle sabit) — artefakt güvenli.
       - name: Sonucu sakla
