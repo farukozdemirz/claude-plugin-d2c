@@ -10,8 +10,8 @@
   "scripts": {
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "npm run build && node --test 'test/*.test.mjs'",
-    "test:only": "node --test 'test/*.test.mjs'"
+    "test": "npm run build && node --test test/*.test.mjs",
+    "test:only": "node --test test/*.test.mjs"
   },
   "dependencies": {
     "@babel/parser": "^8.0.4",
