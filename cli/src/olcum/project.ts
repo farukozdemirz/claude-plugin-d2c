@@ -1,13 +1,14 @@
 /**
- * design.json → olcum.json bölüm projeksiyonu.
+ * design.json → olcum.json section projection.
  *
- * `olcum.json` Claude'un TEK girdisi olduğu için iki şey aynı anda doğru olmalı:
- *   1. **Kendi içinde yeterli** — kod yazmak için gereken her değer inline
- *   2. **Compact** — tam scenegraph Claude'un bağlamına girmemeli
+ * Because `olcum.json` is Claude's ONLY input, two things have to hold at once:
+ *   1. **Self-contained** — every value needed to write code is inline
+ *   2. **Compact** — the full scenegraph must not enter Claude's context
  *
- * İkisi çelişiyor gibi görünür ama çelişmiyor: ölçüldü, bir bölümün ham projeksiyonu
- * 131 eleman / 56 KB ve çoğu birbirinin KOPYASI (8 özdeş kart, 45 yıldız). Claude'un
- * ihtiyacı "8 kart var, biri şöyle, aralarında 16 px" — 8 kopya değil.
+ * These look contradictory but are not: measured, a section's raw projection is
+ * 131 elements / 56 KB and most of them are COPIES of each other (8 identical cards,
+ * 45 stars). What Claude needs is "there are 8 cards, one looks like this, 16 px
+ * apart" — not 8 copies.
  */
 import type { Design, Eleman } from '../contracts/design.js';
 import type { SectionMap, Bolum } from '../contracts/sections.js';
@@ -20,19 +21,19 @@ import {
 
 export interface ProjeSecenek {
   /**
-   * Açık tasarım kutusu `[x, y, w, h]` — bölüm yerine BELİRLİ bir bölge.
+   * An explicit design box `[x, y, w, h]` — a SPECIFIC region instead of a section.
    *
-   * Dikey akmayan ekranlar için gerekli: drawer/overlay panelleri (ör. x=940,
-   * y=0–1080) yatay bant haritasına oturmaz. `limitations.md`'de kayıtlı
-   * "serbest yerleşimli artboard" sınırının pratik çözümü — eski akıştaki
-   * `bolum_kutu` alanının karşılığı.
+   * Needed for screens that do not flow vertically: drawer/overlay panels (e.g.
+   * x=940, y=0–1080) do not fit the horizontal band map. The practical answer to
+   * the "freely laid out artboard" limit recorded in `limitations.md` — the
+   * equivalent of the old flow's `bolum_kutu` field.
    */
   kutu?: [number, number, number, number];
-  /** Mevcut olcum.json (testid birleştirme için). */
+  /** The existing olcum.json (for merging testids). */
   onceki?: Olcum | null;
-  /** true → `testid`'ler taşınmaz, sıfırdan yazılır. */
+  /** true → `testid`s are not carried over, they are written from scratch. */
   force?: boolean;
-  /** Tekrar sıkıştırma eşiği (bu sayıdan az tekrar sıkıştırılmaz). */
+  /** Repeat compression threshold (fewer repeats than this are not compressed). */
   tekrarEsigi?: number;
 }
 
@@ -47,10 +48,11 @@ export function slugify(s: string): string {
 }
 
 /**
- * Eleman bölüme ait mi?
+ * Does the element belong to the section?
  *
- * Kural: kutunun **dikey orta noktası** bölüm aralığındaysa. Sınırda duran elemanın
- * hangi bölüme sayılacağı böylece deterministik — iki bölüme birden düşmez.
+ * The rule: when the box's **vertical midpoint** falls inside the section range. This
+ * makes it deterministic which section an element sitting on a boundary belongs to —
+ * it cannot land in two sections at once.
  */
 function bolumdeMi(
   el: Eleman,
@@ -66,7 +68,7 @@ function bolumdeMi(
   return ox >= bx - 0.5 && ox <= bx + bw + 0.5 && oy >= by - 0.5 && oy <= by + bh + 0.5;
 }
 
-/** Tekrar tespiti için eleman imzası — aynı imza = "aynı şey". */
+/** Element signature for repeat detection — same signature = "the same thing". */
 function imza(el: Eleman, vp: 'desktop' | 'mobil'): string {
   const o = el[vp];
   if (!o) return '';
@@ -97,7 +99,7 @@ interface TekrarSonuc {
   konumlar?: Array<[number, number]>;
 }
 
-/** Sıralı değerlerin adımı düzenli mi? Düzenliyse ortalama adımı döndürür. */
+/** Is the step between sorted values regular? If so, returns the average step. */
 function duzenliAdim(vals: number[]): number | null {
   if (vals.length < 2) return null;
   const adimlar: number[] = [];
@@ -108,11 +110,12 @@ function duzenliAdim(vals: number[]): number | null {
 }
 
 /**
- * Aynı imzalı elemanları düzenli dizilere sıkıştırır.
+ * Compresses elements with the same signature into regular series.
  *
- * Sıkıştırma yalnız **düzenli adım** varsa yapılır: ardışık farklar birbirinden
- * %2'den fazla sapıyorsa dizi düzensizdir ve **sıkıştırılmaz** — "8 kart var, 332 px
- * arayla" demek yalnız gerçekten öyleyse doğru. Uydurma yok.
+ * Compression happens only when the **step is regular**: if consecutive differences
+ * deviate from each other by more than 2%, the series is irregular and is **not
+ * compressed** — saying "8 cards, 332 px apart" is only correct when it really is
+ * so. Nothing is invented.
  */
 export function tekrarBul(
   grup: Eleman[],
@@ -125,7 +128,7 @@ export function tekrarBul(
   const xs = tek(grup.map((e) => kutu(e)[0]!));
   const ys = tek(grup.map((e) => kutu(e)[1]!));
 
-  // 1) Düzenli 1B dizi — diğer eksen sabit
+  // 1) Regular 1-D series — the other axis is constant
   for (const eksen of ['x', 'y'] as const) {
     const i = eksen === 'x' ? 0 : 1;
     const digerTek = eksen === 'x' ? ys : xs;
@@ -136,7 +139,7 @@ export function tekrarBul(
     return { temsilci: sirali[0]!, adet: sirali.length, duzenli: true, eksen, adim };
   }
 
-  // 2) Düzenli ızgara — her iki eksende düzenli adım, delik yok
+  // 2) Regular grid — a regular step on both axes, no holes
   if (xs.length > 1 && ys.length > 1 && xs.length * ys.length === grup.length) {
     const ax = duzenliAdim(xs);
     const ay = duzenliAdim(ys);
@@ -151,7 +154,7 @@ export function tekrarBul(
     }
   }
 
-  // 3) Düzensiz — stil/boyut bir kez, konumlar tam listeyle korunur (BİLGİ KAYBI YOK)
+  // 3) Irregular — style/size once, positions kept as a full list (NO INFORMATION LOST)
   const sirali = [...grup].sort((a, b) => kutu(a)[1]! - kutu(b)[1]! || kutu(a)[0]! - kutu(b)[0]!);
   return {
     temsilci: sirali[0]!,
@@ -170,7 +173,7 @@ function toOlcumEleman(el: Eleman, rol: string | null): OlcumEleman {
   if (el.font) {
     o.font = {
       ...el.font,
-      // M1 KURALI: AGC font kutusu tüketilmez; kod fazı tarayıcıda ölçer (POC-4 → M2).
+      // M1 RULE: the AGC font box is not consumed; the code phase measures it in the browser (POC-4 → M2).
       fontKutusuKaynak: 'tarayici',
       yariSatir: null,
     };
@@ -189,20 +192,21 @@ export function project(
 ): Olcum {
   const esik = sec.tekrarEsigi ?? 3;
   const vpAna = harita.viewport;
-  // Raporlanan kutu: açık verilmişse o, yoksa bölüm tam genişlik.
+  // The reported box: the explicit one if given, otherwise the section at full width.
   const kutu: [number, number, number, number] =
     sec.kutu ?? [0, bolum.y, harita.tasarim[0], bolum.h];
 
   //
-  // SEÇİM kutusu, raporlanan kutudan farklı olabilir.
+  // The SELECTION box can differ from the reported box.
   //
-  // Bölüm haritasından gelen kutularda seçim YALNIZ DİKEY yapılır. Sebep ölçüldü:
-  // yorum carousel'inde 8 kart var ama 4'ü artboard'ın sağına taşıyor (x 1391…2387).
-  // Yatay kısıt uygulanırsa bu 4 kart düşüyor ve "8 kart" bilgisi kayboluyor —
-  // oysa carousel'in 8 kartı olduğu gerçek tasarım bilgisi.
+  // For boxes coming from the section map, selection is VERTICAL ONLY. The reason was
+  // measured: the review carousel has 8 cards but 4 of them overflow to the right of
+  // the artboard (x 1391…2387). Applying a horizontal constraint drops those 4 cards
+  // and the "8 cards" information is lost — yet the fact that the carousel has 8 cards
+  // is real design information.
   //
-  // Açık `--kutu`'da yatay kısıt ŞART: drawer paneli (x 940…1440) yalnız kendi
-  // içeriğini almalı.
+  // With an explicit `--kutu` the horizontal constraint is REQUIRED: a drawer panel
+  // (x 940…1440) must take only its own content.
   const secimKutu: [number, number, number, number] = sec.kutu
     ? kutu
     : [-1e9, bolum.y, 2e9, bolum.h];
@@ -210,20 +214,22 @@ export function project(
   let icinde = design.elemanlar.filter((e) => bolumdeMi(e, vpAna, secimKutu));
 
   //
-  // OVERLAY FİLTRESİ — arkada kalan elemanları ele.
+  // OVERLAY FILTER — discard elements left behind it.
   //
-  // Drawer/modal gibi bir panel, sayfanın üstüne biner. Altındaki içerik kutunun
-  // içinde kalır ama GÖRÜNMEZ; geometriyle ayırt edilemez, boyama sırasıyla edilir.
+  // A panel such as a drawer or modal sits on top of the page. The content underneath
+  // stays inside the box but is INVISIBLE; geometry cannot tell them apart, paint order
+  // can.
   //
-  // Doğrulanmış (değerlendir drawer'ı): panel `Rectangle 7931` sira=153; arkadaki
-  // sipariş özeti ("Genel Toplam", "Ödeme Bilgileri") sira 107–149; drawer'ın kendi
-  // içeriği sira 154–186. Filtre olmadan arka plan drawer'ın ölçümüne karışıyor ve
-  // sol padding 32 yerine 7 çıkıyordu.
+  // Verified (the review drawer): the panel `Rectangle 7931` has sira=153; the order
+  // summary behind it ("Genel Toplam", "Ödeme Bilgileri") has sira 107–149; the drawer's
+  // own content has sira 154–186. Without the filter the background bleeds into the
+  // drawer's measurement and the left padding came out as 7 instead of 32.
   //
-  // YALNIZ açık `--kutu` verildiğinde uygulanır. Bölüm haritasından gelen kutulara
-  // uygulanmaz: ölçüldü — bölüm bandı (`Rectangle 6645`) kendi içeriğinin bir kısmından
-  // SONRA boyanıyor ve filtre 8 karttan 4'ünü eliyordu. Bölümlerde katman düzenini
-  // zaten bant otoritesi çözüyor; overlay filtresi oraya ait değil.
+  // Applied ONLY when an explicit `--kutu` is given. It is not applied to boxes coming
+  // from the section map: measured — the section band (`Rectangle 6645`) is painted
+  // AFTER part of its own content, and the filter dropped 4 of the 8 cards. Inside
+  // sections the layer order is already resolved by band authority; the overlay filter
+  // does not belong there.
   const panel = sec.kutu ? icinde.find((e) => {
     const k = e[vpAna]?.kutu;
     if (!k) return false;
@@ -234,7 +240,7 @@ export function project(
   }) : undefined;
   if (panel) icinde = icinde.filter((e) => e.sira >= panel.sira);
 
-  // Rol etiketleri — yalnız güvenle türetilebilenler.
+  // Role labels — only the ones that can be derived safely.
   const bantAdi = bolum.bant;
   const baslikMetin = bolum.baslik?.metin ?? null;
   const rolOf = (e: Eleman): string | null => {
@@ -243,7 +249,7 @@ export function project(
     return null;
   };
 
-  // Tekrar sıkıştırma
+  // Repeat compression
   const gruplar = new Map<string, Eleman[]>();
   for (const e of icinde) {
     const k = imza(e, vpAna);
@@ -277,14 +283,14 @@ export function project(
   }
   elemanlar.sort((a, b) => a.sira - b.sira);
 
-  // ── hesaplanan boşluklar (playbook §14: komşu kutuların farkından) ───────────
+  // ── computed gaps (playbook §14: from the difference of neighbouring boxes) ──
   const hesaplanan: Olcum['hesaplanan'] = [];
   /**
-   * Bölüm sol padding'i — kutunun sol kenarına en yakın İÇERİK elemanı.
-   * playbook §14: `padding = içerik.x − kutu.x`.
+   * The section's left padding — the CONTENT element closest to the box's left edge.
+   * playbook §14: `padding = content.x − box.x`.
    *
-   * Kutu genişliğindeki elemanlar (zemin/panel) padding tanımlamaz ve elenir.
-   * Arkada kalan elemanlar overlay filtresiyle zaten düşmüştür.
+   * Elements as wide as the box (backgrounds/panels) do not define padding and are
+   * filtered out. Elements left behind have already been dropped by the overlay filter.
    */
   const paddingOf = (vp: 'desktop' | 'mobil') => {
     if (vp !== vpAna) return null;
@@ -294,7 +300,7 @@ export function project(
       .filter((a) => a.k[2] < kutu[2] * 0.98);
     if (!adaylar.length) return null;
     const enSol = adaylar.reduce((m, a) => (a.k[0] < m.k[0] ? a : m));
-    // En sık hizalanma — glif mürekkebi ile tasarım hizası ayrışabilir (playbook §18).
+    // The most common alignment — glyph ink and design alignment can diverge (playbook §18).
     const sayac = new Map<number, number>();
     for (const a of adaylar) {
       const x = +a.k[0].toFixed(1);
@@ -313,10 +319,11 @@ export function project(
   const pm = paddingOf('mobil');
   const pAny = pd ?? pm;
   if (pAny) {
-    // Ölçülen değer olduğu gibi verilir. Hizalanma dağılımı KANIT olarak eklenir ama
-    // "tasarım niyeti şudur" DENMEZ: hangisinin doğru olduğu bölüme göre değişiyor
-    // (ölçüldü — kart ızgarasında en soldaki doğru, drawer'da en sık hizalanma doğru).
-    // Bu bir yargı ve yargı Claude'a ait; extractor tahmin etmez.
+    // The measured value is reported as is. The alignment distribution is added as
+    // EVIDENCE, but "the design intent is X" is NOT claimed: which one is right varies
+    // by section (measured — in the card grid the leftmost is right, in the drawer the
+    // most common alignment is right). That is a judgement, and the judgement belongs to
+    // Claude; the extractor does not guess.
     const fark = Math.abs(pAny.deger - pAny.enSik) > 0.01;
     hesaplanan.push({
       ne: 'bölüm sol padding',
@@ -332,12 +339,12 @@ export function project(
     });
   }
   //
-  // Gap türetme — ADIM BAŞINA BİR TANE.
+  // Gap derivation — ONE PER STEP.
   //
-  // Bir kart 332 px adımla tekrar ediyorsa kartın İÇİNDEKİ her eleman da 332 adımla
-  // tekrar eder. Hepsi için "boşluk" yazmak gürültü ve yanıltıcı olur:
-  // `user-icon arası boşluk 314` teknik olarak doğru ama tasarımda böyle bir boşluk yok.
-  // Anlamlı olan, o adımı ÜRETEN elemanın (en büyüğünün) boşluğudur.
+  // If a card repeats with a 332 px step, every element INSIDE the card repeats with the
+  // same 332 step. Writing a "gap" for all of them is noise and misleading:
+  // `gap between user-icon 314` is technically true but no such gap exists in the design.
+  // What is meaningful is the gap of the element that PRODUCES that step (the largest one).
   const adimAdaylari = new Map<string, { ad: string | null; adet: number; boyut: number; adim: number; eksen: 'x' | 'y' }>();
   for (const e of elemanlar) {
     const t = e.tekrar;
@@ -363,7 +370,7 @@ export function project(
     });
   }
 
-  // ── testid birleştirme ──────────────────────────────────────────────────────
+  // ── testid merge ────────────────────────────────────────────────────────────
   if (!sec.force && sec.onceki) {
     const eski = new Map(
       sec.onceki.elemanlar.filter((e) => e.id && e.testid).map((e) => [e.id!, e.testid!])
@@ -378,7 +385,7 @@ export function project(
     if (tasinan) cozulemedi.push(`bilgi: ${tasinan} testid önceki dosyadan taşındı`);
   }
 
-  // Bölümde geçen palet ve stiller
+  // The palette and styles that occur in this section
   const paletSayac = new Map<string, number>();
   for (const e of elemanlar) {
     for (const vp of ['desktop', 'mobil'] as const) {

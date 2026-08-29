@@ -7389,7 +7389,7 @@ function toOlcumEleman(el, rol) {
   if (el.font) {
     o.font = {
       ...el.font,
-      // M1 KURALI: AGC font kutusu tüketilmez; kod fazı tarayıcıda ölçer (POC-4 → M2).
+      // M1 RULE: the AGC font box is not consumed; the code phase measures it in the browser (POC-4 → M2).
       fontKutusuKaynak: "tarayici",
       yariSatir: null
     };
