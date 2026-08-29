@@ -16,8 +16,8 @@ test('r yoksa radiusKaynak "yok"', () => {
 });
 
 test('GERÇEK Path 8257: yoldan radius 12 çıkar', () => {
-  // Bu yol, benchmark'ta "radius 12" olarak kayıtlı; eski araç piksel oturtmayla
-  // r=11.34 bulup 12'ye yuvarlıyordu. Kaynak veri kesin değeri taşıyor.
+  // This path is recorded in the benchmark as "radius 12"; the old tool found r=11.34 by
+  // pixel fitting and rounded to 12. The source data carries the exact value.
   const d = 'M 12 0 L 1300 0 C 1306.62744140625 0 1312 5.37258243560791 1312 12 L 1312 60 C 1312 66.6274185180664 1306.62744140625 72 1300 72 L 12 72 C 5.372583389282227 72 0 66.6274185180664 0 60 L 0 12 C 0 5.37258243560791 5.372583389282227 0 12 0 Z';
   assert.equal(radiusFromRoundedRectPath(d), 12);
   const m = measureShape({ type: 'path', path: d });
@@ -39,7 +39,7 @@ test('yuvarlatılmış dikdörtgen OLMAYAN yol için radius UYDURULMAZ', () => {
 });
 
 test('kübik doğrulaması tutmayan yol reddedilir', () => {
-  // Kontrol noktası çember yayına ait değil -> desen tanınmamalı.
+  // The control point does not belong to a circular arc -> the pattern must not be recognised.
   const d = 'M 12 0 L 1300 0 C 1301 0 1312 11 1312 12';
   assert.equal(radiusFromRoundedRectPath(d), null);
 });
@@ -64,11 +64,11 @@ test('boş path ölçülemez — null döner (uydurulmaz)', () => {
   assert.equal(measureShape({ type: 'path', path: '' }), null);
 });
 
-// ── compound (boolean birleştirilmiş şekil) ──────────────────────────────────
+// ── compound (boolean-combined shape) ────────────────────────────────────────
 test('compound şekil `path` gibi ölçülür', () => {
-  // Gerçek tasarımda bulundu: 291 düğümün 10'u compound'du ve SESSİZCE düşüyordu
-  // (bilinmeyen tip %3,44). `shape.path` boolean işlemin SONUCUNU taşıyor —
-  // doğrulandı: compound'un bbox'ı çocuklarının birleşimiyle birebir aynı.
+  // Found in a real design: 10 of 291 nodes were compound and were dropped SILENTLY
+  // (an unknown-type rate of 3.44%). `shape.path` carries the RESULT of the boolean
+  // operation — verified: the compound's bbox matches the union of its children exactly.
   const m = measureShape({
     type: 'compound',
     operation: 'exclude',

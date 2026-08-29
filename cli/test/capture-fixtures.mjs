@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * Canlı XD linkinden test fixture'ları yakalar.
+ * Captures test fixtures from a live XD link.
  *
- * Çıktı `test/fixtures/canli/` altına yazılır ve GITIGNORED'dır — tasarım dosyasına
- * özeldir (deponun `fixtures/benchmark.json` politikasıyla aynı).
+ * The output is written under `test/fixtures/live/` and is GITIGNORED — it is specific
+ * to a design file (the same policy as the repo's `fixtures/benchmark.json`).
  *
- * SANITIZASYON (ana plan Kural 2): manifest ham haliyle `linkTemplate.data.access_token`
- * ve `manifestURL` alanlarında CANLI TOKEN taşır. Yazmadan önce redakte edilir.
- * AGC dosyaları token içermez (saf scenegraph) ama yine de kontrolden geçer.
+ * SANITISATION (main plan Rule 2): the raw manifest carries a LIVE TOKEN in
+ * `linkTemplate.data.access_token` and `manifestURL`. It is redacted before writing.
+ * AGC files carry no token (pure scenegraph) but go through the check anyway.
  */
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -20,14 +20,14 @@ if (!URL_ || !EKRANLAR.length) {
   console.error('kullanım: capture-fixtures.mjs <xd-url> <ekran adı> [ekran adı…]');
   process.exit(2);
 }
-const OUT = fileURLToPath(new URL('./fixtures/canli/', import.meta.url));
+const OUT = fileURLToPath(new URL('./fixtures/live/', import.meta.url));
 mkdirSync(OUT, { recursive: true });
 
 const slug = (s) => s.toLocaleLowerCase('tr').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '');
 
 const proto = await fetchShare(URL_);
 
-// Manifest SANITIZE edilerek yazılır — token asla fixture'a girmez.
+// The manifest is written SANITISED — a token never enters a fixture.
 const temiz = redactDeep({ manifest: proto.manifest, modifiedDate: proto.modifiedDate ?? null });
 const manifestStr = JSON.stringify(temiz, null, 1);
 if (/public_[0-9a-f]{8}/.test(manifestStr) || /\d{10}_urn:aaid/.test(manifestStr)) {

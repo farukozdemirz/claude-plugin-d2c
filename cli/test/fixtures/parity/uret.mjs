@@ -1,10 +1,11 @@
 /**
- * `altin.json` üreteci — değerleri **PYTHON motorundan** alır.
+ * Generator for `altin.json` — it takes the values **FROM THE PYTHON ENGINE**.
  *
- * Çıpanın Python olması şart: altın değerler TS motorundan üretilseydi test
- * kendi çıktısını onaylardı ve bir gerileme sessizce "doğru" sayılırdı.
+ * Anchoring to Python is essential: if the golden values were produced by the TS engine,
+ * the test would be approving its own output and a regression would silently count as
+ * "correct".
  *
- * Fixture'lar veya `visual-diff.py` değişirse:  node test/fixtures/parite/uret.mjs
+ * When the fixtures or `visual-diff.py` change:  node test/fixtures/parity/uret.mjs
  */
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';

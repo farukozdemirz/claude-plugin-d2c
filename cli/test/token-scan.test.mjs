@@ -1,11 +1,11 @@
 /**
- * KURAL 2 — depo genelinde token taraması.
+ * RULE 2 — a repository-wide token scan.
  *
- * Ana plan §7: manifest fixture'ı ham hâliyle `access_token` ve `manifestURL`
- * taşır; commit öncesi temizlenir ve **CI'da token deseni taraması** yapılır.
+ * Main plan §7: the raw manifest fixture carries `access_token` and `manifestURL`; those
+ * are cleaned before committing and **a token pattern scan runs in CI**.
  *
- * Tarama ayrı bir CI adımı değil, bir TEST: `npm test` her yerde koşuyor, ayrı
- * adım unutulabilir ya da atlanabilir.
+ * The scan is not a separate CI step but a TEST: `npm test` runs everywhere, while a
+ * separate step can be forgotten or skipped.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -15,13 +15,13 @@ import { fileURLToPath } from 'node:url';
 
 const KOK = fileURLToPath(new URL('../../', import.meta.url));
 
-// Gerçek Adobe token biçimi: <epoch>_urn:aaid:sc:<bölge>:<uuid>;public_<hex>
+// The real Adobe token format: <epoch>_urn:aaid:sc:<region>:<uuid>;public_<hex>
 const TOKEN = /\d{10}_urn:aaid:sc:[^;\s"']+;public_[0-9a-f]{6,}/;
-// Ham manifest URL'i de token taşır.
+// The raw manifest URL carries a token too.
 const MANIFEST_URL = /manifestURL["'\s:=]+https?:\/\/[^\s"']*access_token=/i;
 
 const ATLA = new Set(['node_modules', '.git', 'dist', '.next', 'coverage']);
-// İkili dosyalarda metin araması anlamsız.
+// Searching for text in binary files is meaningless.
 const IKILI = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.woff', '.woff2', '.ttf', '.otf', '.ico', '.pdf', '.zip']);
 
 function dosyalar(kok) {
@@ -43,11 +43,11 @@ function dosyalar(kok) {
 }
 
 /**
- * Uydurma token mu?
+ * Is this a fake token?
  *
- * Muafiyeti "işaretli dosya" ile sınırlamak yetmez: gerçek bir token da yanına
- * işaret konularak geçirilebilirdi. Bu yüzden değerin kendisi de sınanıyor —
- * gerçek Adobe token'ları böyle tekdüze olmaz.
+ * Limiting the exemption to "a marked file" is not enough: a real token could be slipped
+ * through by putting the marker next to it. So the value itself is checked as well —
+ * real Adobe tokens are not this uniform.
  */
 function sahteMi(t) {
   const hex = /public_([0-9a-f]+)/.exec(t)?.[1] ?? '';
@@ -63,11 +63,11 @@ test('deponun hiçbir dosyasında Adobe access_token YOK', () => {
   for (const f of hepsi) {
     let src;
     try { src = readFileSync(f, 'utf8'); } catch { continue; }
-    // Bu dosyanın kendisi deseni tanımlıyor; kendini yakalamasın.
+    // This file defines the pattern itself; it must not catch itself.
     if (f.endsWith('token-scan.test.mjs')) continue;
-    // Redaksiyon testlerinin token BİÇİMİNE ihtiyacı var. Dosya bazında muafiyet
-    // yerine satır bazında işaret: `SAHTE-TOKEN` yorumu olan yerde uydurma değer
-    // beklenir ve o değer gerçekten uydurma mı diye AYRICA bakılır.
+    // The redaction tests need the token FORMAT. Instead of a file-level exemption, a
+    // line-level marker: where a `SAHTE-TOKEN` comment appears a fake value is expected,
+    // and whether that value really is fake is checked SEPARATELY.
     const isaretli = src.includes('SAHTE-TOKEN');
     const bulunan = src.match(new RegExp(TOKEN.source, 'g')) ?? [];
     for (const t of bulunan) {
@@ -80,7 +80,7 @@ test('deponun hiçbir dosyasında Adobe access_token YOK', () => {
 });
 
 test('tarama GERÇEKTEN yakalıyor — desen kendi kendini kanıtlar', () => {
-  // Yanlış negatif en tehlikeli hâl: hiçbir şey bulamayan bir tarama da "yeşil" görünür.
+  // A false negative is the most dangerous case: a scan that finds nothing also looks "green".
   const sahte = '1798761600_urn:aaid:sc:EU:2f1a-4b;public_a1b2c3d4e5f6';
   assert.ok(TOKEN.test(sahte), 'gerçek biçimli token yakalanmalı');
   assert.ok(TOKEN.test(`{"access_token":"${sahte}"}`), 'JSON içinde de yakalanmalı');
@@ -89,7 +89,7 @@ test('tarama GERÇEKTEN yakalıyor — desen kendi kendini kanıtlar', () => {
     'manifestURL yakalanmalı'
   );
   assert.ok(!TOKEN.test('access_token=REDACTED'), 'redakte edilmiş metin yanlış pozitif olmamalı');
-  // Muafiyet sızıntıya kapı açmamalı: işaret koymak tek başına yetmez.
+  // The exemption must not open a door to a leak: placing the marker is not enough on its own.
   assert.equal(sahteMi(sahte), false, 'gerçek biçimli token "sahte" sayılmamalı');
   assert.equal(
     sahteMi('1700000000_urn:aaid:sc:XX:00000000-0000-4000-8000-000000000000;public_' + 'a'.repeat(40)),
@@ -97,7 +97,7 @@ test('tarama GERÇEKTEN yakalıyor — desen kendi kendini kanıtlar', () => {
 });
 
 test('tarama boş kümede koşmuyor (dosya gerçekten okunuyor)', () => {
-  // Bir yol hatası taramayı sessizce 0 dosyaya indirir ve test yine geçerdi.
+  // A path error would silently reduce the scan to 0 files and the test would still pass.
   assert.ok(hepsi.length > 40, `yalnız ${hepsi.length} dosya tarandı — yol yanlış olabilir`);
   assert.ok(hepsi.some((f) => f.endsWith('README.md')), 'depo kökü taranmalı');
   assert.ok(hepsi.some((f) => f.includes('cli/src/')), 'kaynak taranmalı');

@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { segment, bantlariBul, bosluklariBul, baslikBul, kutula } from '../dist/lib.mjs';
-import { designUret } from './yardim/design-uret.mjs';
+import { designUret } from './helpers/design-uret.mjs';
 
 const W = 1440, H = 3000;
 
@@ -35,7 +35,7 @@ test('bant: kapsayan aday elenir (Rectangle 386 senaryosu)', () => {
 });
 
 test('bant: sol kenarı kapsamayan geniş eleman BANT DEĞİL (Path 8257 senaryosu)', () => {
-  // w=1312 → %91, eşiği geçiyor; ama x=64 olduğu için eski probe (x≈8) onu görmezdi.
+  // w=1312 → 91%, above the threshold; but because x=64 the old probe (x≈8) would not see it.
   const d = design([{ ad: 'Bar', kutu: [64, 3133, 1312, 72], dolgu: '#0C2380' }]);
   assert.deepEqual(bantlariBul(kut(d), W, H), []);
 });
@@ -50,7 +50,7 @@ test('bant: 8 px\'ten kısa şerit bant sayılmaz', () => {
   assert.deepEqual(bantlariBul(kut(d), W, H), []);
 });
 
-// ── boşluk analizi ────────────────────────────────────────────────────────────
+// ── gap analysis ──────────────────────────────────────────────────────────────
 test('boşluk: eşikten kısa aralık ayraç değil', () => {
   const d = design([
     { kutu: [100, 0, 200, 100] },
@@ -110,12 +110,12 @@ test('isim: metin yoksa null — uydurulmaz', () => {
   assert.equal(baslikBul(kut(d), 0, 900), null);
 });
 
-// ── boş bölüm birleştirme ─────────────────────────────────────────────────────
+// ── empty section merging ─────────────────────────────────────────────────────
 test('içinde eleman olmayan bölüm komşusuna birleşir', () => {
   const d = design([
     { kutu: [100, 0, 200, 100] },
     { kutu: [100, 300, 200, 100] },
-    // 400 → 3000 tamamen boş: ayrı bölüm olmamalı
+    // 400 → 3000 is completely empty: it must not be a section of its own
   ]);
   const m = segment(d);
   const bos = m.bolumler.filter((b) => !kut(d).some((k) => k.y < b.y + b.h && k.y + k.h > b.y));
@@ -126,7 +126,7 @@ test('boş bölüm BANDA birleştirilmez — bandın yüksekliği korunur', () =
   const d = design([
     { ad: 'Bant', kutu: [0, 0, 1440, 500], dolgu: '#FAFAFA' },
     { kutu: [100, 50, 200, 100] },
-    // 500 → 3000 boş; bandın h'si 500 kalmalı
+    // 500 → 3000 is empty; the band's h must stay 500
   ]);
   const m = segment(d);
   const bant = m.bolumler.find((b) => b.bant === 'Bant');
@@ -144,18 +144,19 @@ test('bant bölümünün zemini BANDIN rengidir (kapsayanın değil)', () => {
 });
 
 // ── ORACLE ────────────────────────────────────────────────────────────────────
-// Oracle = legacy `section-map.py` çıktısı ve bu deponun DIŞINDA duruyor.
-// Yolu ortam değişkeninden gelir; verilmezse test atlanır. (Eskiden belirli bir
-// makinedeki kişisel depo yoluna sabitlenmişti — başkasında hiç koşmazdı.)
+// The oracle is the legacy `section-map.py` output and lives OUTSIDE this repo.
+// Its path comes from an environment variable; without it the test is skipped. (It used
+// to be hardcoded to a personal repo path on one machine — it never ran anywhere else.)
 const ORACLE = process.env.D2C_ORACLE ?? '';
-// `design.json` artık fixture'lardan ağsız üretiliyor; oracle ise bu deponun
-// DIŞINDA (legacy `section-map.py` çıktısı) — o yoksa test haklı olarak atlanır.
+// `design.json` is now produced from fixtures without the network; the oracle, however,
+// lives OUTSIDE this repo (the legacy `section-map.py` output) — without it the test is
+// rightly skipped.
 const designA = await designUret();
 
 if (!existsSync(ORACLE) || !designA) {
   skip(
     !designA
-      ? 'oracle testi atlandı — cli/test/fixtures/canli/ yok'
+      ? 'oracle testi atlandı — cli/test/fixtures/live/ yok'
       : 'oracle testi atlandı — D2C_ORACLE tanımlı değil ' +
         '(legacy section-map.py çıktısının yolu; bu deponun dışında)'
   );
@@ -188,8 +189,8 @@ if (!existsSync(ORACLE) || !designA) {
   });
 
   test('ORACLE — boşluk türevli sınırlar ≤ 5 px sapıyor (son boş blok hariç)', () => {
-    // Eski yöntem ekran görüntüsündeki MÜREKKEBİ, yeni yöntem eleman KUTULARINI
-    // kullanıyor; metin çerçevesi mürekkepten biraz taşar. Sapma bu farktan geliyor.
+    // The old method used the INK in a screenshot, the new one uses element BOXES; a text
+    // frame extends slightly beyond the ink. The deviation comes from that difference.
     const sapmalar = [];
     for (let i = 0; i < ora.bolumler.length - 1; i++) {
       const o = ora.bolumler[i], m = mine.bolumler[i];

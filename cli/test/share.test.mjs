@@ -30,7 +30,7 @@ test('prototypeData yoksa TEŞHİSLİ hata', () => {
 });
 
 test('bozuk JSON yükü ÇALIŞTIRILMAZ — teşhisli hata verir', () => {
-  // Eğer eval kullanılsaydı bu ifade ÇALIŞIRDI. Çalışmamalı.
+  // If eval were used, this expression WOULD RUN. It must not.
   const zararli = 'window.prototypeData = {"a": (globalThis.__PWNED = 1)};';
   assert.throws(() => parsePrototypeData(zararli), /JSON olarak ayrıştırılamadı/);
   assert.equal(globalThis.__PWNED, undefined, 'uzak kod ÇALIŞTIRILMIŞ — Kural 1 ihlali');
@@ -57,10 +57,10 @@ test('specs URL normalizasyonu', () => {
 });
 
 test('/view/ OLMAYAN biçimler OLDUĞU GİBİ denenir', () => {
-  // Ölçüldü: `https://xd.adobe.com/spec/<id>/grid/` canlı ve 200 dönüyor, ama
-  // sonuna `/specs/` eklenince 404 oluyordu — araç da "link geçersiz veya
-  // yayından kaldırılmış" deyip KULLANICIYI suçluyordu. Hata bizim ürettiğimiz
-  // adresteydi; körlemesine ek yapmak bir teşhis hatasıdır.
+  // Measured: `https://xd.adobe.com/spec/<id>/grid/` is live and returns 200, but
+  // appending `/specs/` made it 404 — and the tool then blamed THE USER with "the link
+  // is invalid or has been withdrawn". The error was in the address we produced;
+  // appending blindly is a diagnostic bug.
   for (const u of [
     'https://xd.adobe.com/spec/1f560469/grid/',
     'https://xd.adobe.com/spec/1f560469/grid',
@@ -70,7 +70,7 @@ test('/view/ OLMAYAN biçimler OLDUĞU GİBİ denenir', () => {
 });
 
 test('prototypeData = null → LİNK HATASI teşhisi (sözleşme hatası DEĞİL)', () => {
-  // Adobe geçersiz linke HTTP 200 + null dönüyor. Sonraki `{` bloğuna atlanmamalı.
+  // Adobe answers an invalid link with HTTP 200 + null. We must not jump to the next `{` block.
   const html = 'window.prototypeData = null; if (window.prototypeData && x) { var y = {"a":1}; }';
   assert.equal(sliceAssignment(html, 'prototypeData'), null);
   assert.throws(() => parsePrototypeData(html), /geçersiz veya erişilemiyor/);

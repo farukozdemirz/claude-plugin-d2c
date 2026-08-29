@@ -1,8 +1,9 @@
 /**
- * Bileşen envanteri testleri.
+ * Component inventory tests.
  *
- * Kabul ölçütü ana plandan: *"envanter `export default` ve re-export'ları yakalıyor"*.
- * Regex script bunları kaçırıyordu; buradaki son test farkı sayıyla sabitliyor.
+ * The acceptance criterion from the main plan: *"the inventory catches `export default`
+ * and re-exports"*. The regex script missed those; the last test here pins the
+ * difference down with a number.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -10,7 +11,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { envanterCikar, envanterYaz } from '../dist/lib.mjs';
 
-const KOK = fileURLToPath(new URL('./fixtures/proje/components/', import.meta.url));
+const KOK = fileURLToPath(new URL('./fixtures/project/components/', import.meta.url));
 const PY = fileURLToPath(new URL('../../skills/d2c-code/scripts/component-inventory.py', import.meta.url));
 const env = envanterCikar(KOK);
 
@@ -33,7 +34,7 @@ test('export default class ve adlandırılmış sınıf birlikte', () => {
 });
 
 test('export default memo(X) sarmalanan adı gösterir', () => {
-  // `(anonim)` demek envanteri işe yaramaz kılardı — sarmalanan bileşen adı lazım.
+  // Saying `(anonymous)` would make the inventory useless — the wrapped component name is what matters.
   assert.deepEqual(adlar('Sarmalanmis.tsx'), ['memo(Sarmalanmis)']);
   assert.equal(dosya('Sarmalanmis.tsx').exportlar[0].varsayilan, true);
 });
@@ -70,7 +71,7 @@ test('token adayı: 3+ dosyada geçen hex', () => {
 });
 
 test('bozuk dosya RAPORLANIR, sessizce atlanmaz', () => {
-  // Sessizce atlamak "bileşen yok" demekle aynı sonucu verir — en tehlikeli hâli.
+  // Skipping silently gives the same outcome as "no component" — the most dangerous form.
   assert.equal(env.hatalar.length, 1);
   assert.match(env.hatalar[0].yol.replace(/\\/g, '/'), /alt\/Bozuk\.tsx/);
   assert.match(envanterYaz(env), /PARSE EDİLEMEDİ/);
@@ -97,7 +98,7 @@ test('KABUL ÖLÇÜTÜ: regex script\'in kaçırdıklarını yakalıyor', () => 
   } catch {
     return; // python yoksa karşılaştırma yapılamaz; diğer testler zaten kapsıyor
   }
-  // Regex script yalnız `export function` ve `export const` görüyor.
+  // The regex script only sees `export function` and `export const`.
   const pyExportlar = [...py.matchAll(/^\s+export : (.+)$/gm)]
     .flatMap((m) => m[1].split(', ').map((s) => s.trim()))
     .filter((s) => s !== '-');

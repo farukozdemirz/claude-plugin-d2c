@@ -15,7 +15,7 @@ test('öteleme kompozisyonu toplanır', () => {
 test('ölçek + öteleme doğru sırada uygulanır', () => {
   const olcek = [2, 0, 0, 2, 0, 0];
   const otele = [1, 0, 0, 1, 5, 5];
-  // önce öteleme sonra ölçek: (0,0) -> (5,5) -> (10,10)
+  // translate first, then scale: (0,0) -> (5,5) -> (10,10)
   assert.deepEqual(applyPoint(multiply(olcek, otele), 0, 0), { x: 10, y: 10 });
 });
 
@@ -40,7 +40,7 @@ test('iç içe grup transformları birikir ve artboard kökeni düşülür', () 
   };
   const { elemanlar } = flatten(agc);
   assert.equal(elemanlar.length, 1);
-  // doküman uzayı: -100+30+5 = -65 ; artboard kökeni (-100,-200) düşülür -> 35, 46
+  // document space: -100+30+5 = -65 ; the artboard origin (-100,-200) is subtracted -> 35, 46
   const kutu = toArtboardBox(elemanlar[0], { x: -100, y: -200 });
   assert.deepEqual(kutu, { x: 35, y: 46, w: 10, h: 20 });
 });

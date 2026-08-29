@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { project, tekrarBul, slugify, segment, OlcumSchema, ConfigSchema } from '../dist/lib.mjs';
-import { designUret } from './yardim/design-uret.mjs';
+import { designUret } from './helpers/design-uret.mjs';
 import { fileURLToPath } from 'node:url';
 
 const W = 1440, H = 3000;
@@ -30,7 +30,7 @@ const bol = (y, h, over = {}) => ({ index: 1, y, h, zemin: null, bant: null, ad:
 
 const elsOf = (d) => d.elemanlar;
 
-// ── bölüm kapsamı ─────────────────────────────────────────────────────────────
+// ── section scope ─────────────────────────────────────────────────────────────
 test('kapsam: orta nokta kuralı — sınırdaki eleman TEK bölüme düşer', () => {
   const d = design([
     { ad: 'Ust',  kutu: [10, 90, 50, 40] },   // orta 110 → bölüm 1 (0–200)
@@ -43,7 +43,7 @@ test('kapsam: orta nokta kuralı — sınırdaki eleman TEK bölüme düşer', (
   assert.deepEqual(o2.elemanlar.map((e) => e.ad), ['Alt']);
 });
 
-// ── tekrar sıkıştırma ─────────────────────────────────────────────────────────
+// ── repeat compression ────────────────────────────────────────────────────────
 test('tekrar: düzenli 1B dizi tek temsilciye iner', () => {
   const d = design(Array.from({ length: 8 }, (_, i) => ({ ad: 'Kart', kutu: [64 + i * 332, 100, 316, 204] })));
   const t = tekrarBul(elsOf(d), 'desktop', 3);
@@ -85,7 +85,7 @@ test('tekrar: farklı boyutlu aynı adlı elemanlar AYNI grup değil', () => {
     { ad: 'K', kutu: [40, 0, 99, 10] },
   ]);
   const o = project(d, harita([bol(0, 200)]), bol(0, 200));
-  // İmza farklı olduğu için 10×10'lar (2 adet, eşik altı) + 99×10 ayrı kalır
+  // Because the signature differs, the 10×10s (2 of them, below the threshold) + the 99×10 stay separate
   assert.equal(o.elemanlar.length, 3);
 });
 
@@ -110,7 +110,7 @@ test('hesaplanan: her kayıt `nasil` ile kaynağını söyler', () => {
   for (const h of o.hesaplanan) assert.ok(h.nasil && h.nasil.length > 3, `nasil eksik: ${h.ne}`);
 });
 
-// ── testid yaşam döngüsü ──────────────────────────────────────────────────────
+// ── testid lifecycle ──────────────────────────────────────────────────────────
 const basit = () => {
   const d = design([{ id: 'a1', ad: 'Panel', kutu: [0, 10, 100, 50] }, { id: 'a2', ad: 'Baslik', kutu: [0, 70, 80, 20] }]);
   return { d, h: harita([bol(0, 200)]) };
@@ -142,7 +142,7 @@ test('testid: kaybolan eleman SESSİZ geçilmez — cozulemedi ye yazılır', ()
   assert.ok(ikinci.cozulemedi.some((c) => c.includes('eski-id') && c.includes('taşınamadı')));
 });
 
-// ── M1 kuralı: font kutusu tüketilmez ─────────────────────────────────────────
+// ── M1 rule: the font box is not consumed ─────────────────────────────────────
 test('M1: fontKutusuKaynak her zaman "tarayici", yariSatir null', () => {
   const d = design([{ ad: 'T', tip: 'metin', metin: 'Merhaba', font: 48, kutu: [0, 10, 200, 56] }]);
   const o = project(d, harita([bol(0, 200)]), bol(0, 200));
@@ -152,7 +152,7 @@ test('M1: fontKutusuKaynak her zaman "tarayici", yariSatir null', () => {
   assert.equal(t.font.fontKutusuAgc, 48, 'ham AGC değeri yine de taşınmalı');
 });
 
-// ── şema / config ─────────────────────────────────────────────────────────────
+// ── schema / config ───────────────────────────────────────────────────────────
 test('Zod: testid null iken şema geçerli', () => {
   const { d, h } = basit();
   assert.doesNotThrow(() => OlcumSchema.parse(project(d, h, h.bolumler[0])));
@@ -173,16 +173,16 @@ test('slugify Türkçe karakterleri çevirir', () => {
   assert.equal(slugify('Sipariş Seç — 2'), 'siparis-sec-2');
 });
 
-// ── GERÇEK VERİ ───────────────────────────────────────────────────────────────
-// Eskiden `/tmp/design-a.json`'a bağlıydı: /tmp temizlenince test SESSİZCE atlanıyordu.
-// Artık kayıtlı AGC fixture'larından ağsız üretiliyor.
-// Depoya göre çözülür: mutlak ev dizini yolu, depo başka yere klonlanınca
-// sessizce tutmazdı (test atlanır, kimse fark etmez).
+// ── REAL DATA ─────────────────────────────────────────────────────────────────
+// This used to depend on `/tmp/design-a.json`: once /tmp was cleared the test was
+// SILENTLY skipped. It is now produced from the recorded AGC fixtures, without a network.
+// Resolved relative to the repo: an absolute home-directory path would silently stop
+// matching if the repo were cloned elsewhere (the test skips and nobody notices).
 const BENCH = fileURLToPath(new URL('../../fixtures/benchmark.json', import.meta.url));
 const d = await designUret();
 
 if (!d) {
-  skip('gerçek veri testi atlandı — cli/test/fixtures/canli/ yok ' +
+  skip('gerçek veri testi atlandı — cli/test/fixtures/live/ yok ' +
        '(node test/capture-fixtures.mjs <xd-url> ile yakalayın)');
 } else {
   const h = segment(d);

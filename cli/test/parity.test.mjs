@@ -1,19 +1,21 @@
 /**
- * PARİTE — `visual-diff.py` ↔ TypeScript motoru.
+ * PARITY — `visual-diff.py` ↔ the TypeScript engine.
  *
- * Ana plan Faz 5b'yi açıkça şartlamıştı: *"Parite kanıtlanmadan yapılmaz."*
- * Kabul ölçütü aynı girdilerde ham/yapısal yüzde farkının **< %0,1** olması.
+ * The main plan made Phase 5b conditional in so many words: *"not done until parity is
+ * proven."* The acceptance criterion is a raw/structural percentage difference of
+ * **< 0.1%** on the same inputs.
  *
- * Test iki katmanlı:
+ * The test has two layers:
  *
- *   1. **Canlı** — python3 + PIL varsa iki motor da koşar, sayılar karşılaştırılır.
- *   2. **Altın** — Python yokken bile TS motoru kayıtlı değerleri üretmeli.
- *      (Faz 5b'nin amacı Python'u önkoşul olmaktan çıkarmak; testin kendisi
- *      Python'a bağlı kalırsa o amaç yarım kalırdı.)
+ *   1. **Live** — when python3 + PIL are available, both engines run and the numbers are
+ *      compared.
+ *   2. **Golden** — even without Python, the TS engine must reproduce the recorded values.
+ *      (The point of Phase 5b is to remove Python as a prerequisite; if the test itself
+ *      stayed dependent on Python, that goal would be half-met.)
  *
- * Fixture'lar gerçek gliflerle çizilmiş kart görüntüleri + bir gürültü çifti.
- * Gürültü bilerek var: yeniden örnekleyicideki en küçük katsayı hatası orada
- * görünür, düz zeminde görünmez.
+ * The fixtures are card images drawn with real glyphs plus a noise pair. The noise is
+ * deliberate: the smallest coefficient error in the resampler shows up there, and not on
+ * a flat background.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -24,14 +26,14 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { motorCalistir, pngOku } from '../dist/lib.mjs';
 
-const FIX = fileURLToPath(new URL('./fixtures/parite/', import.meta.url));
+const FIX = fileURLToPath(new URL('./fixtures/parity/', import.meta.url));
 const SCRIPT = fileURLToPath(new URL('../../skills/d2c-code/scripts/visual-diff.py', import.meta.url));
-const ALTIN = fileURLToPath(new URL('./fixtures/parite/altin.json', import.meta.url));
+const ALTIN = fileURLToPath(new URL('./fixtures/parity/altin.json', import.meta.url));
 
 let pilVar = true;
 try { execFileSync('python3', ['-c', 'import PIL'], { stdio: 'ignore' }); } catch { pilVar = false; }
 
-/** Ana plandaki kabul ölçütü. */
+/** The acceptance criterion from the main plan. */
 const TOLERANS = 0.1;
 
 const DURUMLAR = [
@@ -41,9 +43,9 @@ const DURUMLAR = [
   { ad: 'kayma',    a: 'kayma-a.png',    b: 'kayma-b.png' },
   { ad: 'fotosuz',  a: 'fotosuz-a.png',  b: 'fotosuz-b.png' },
   { ad: 'gurultu',  a: 'gurultu-a.png',  b: 'gurultu-b.png' },
-  // --olcekle yolu: b tam 2×, LANCZOS ile küçültülüp karşılaştırılıyor
+  // the --olcekle path: b is exactly 2×, downscaled with LANCZOS and compared
   { ad: 'olcek',    a: 'olcek-a.png',    b: 'olcek-b.png', olcekle: true },
-  // kırpma yolları: --xd-kutu ve --render-kutu birlikte
+  // crop paths: --xd-kutu and --render-kutu together
   { ad: 'kirpma',   a: 'renk-a.png',     b: 'renk-b.png',
     xdKutu: [12, 16, 300, 180], renderKutu: [20, 10, 300, 180] },
 ];
@@ -68,7 +70,7 @@ function pythonKos(d, dizin) {
   try {
     execFileSync('python3', args, { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
   } catch (e) {
-    // Çıkış kodu 1 = yapısal eşik aşıldı; bulgu, hata değil.
+    // Exit code 1 = the structural threshold was exceeded; a finding, not an error.
     if (e.status !== 1) throw e;
   }
   return JSON.parse(readFileSync(jsonYol, 'utf8'));
@@ -98,7 +100,7 @@ for (const d of DURUMLAR) {
 }
 
 test('parite: ısı haritası PNG\'i piksel düzeyinde aynı', { skip: !pilVar && 'PIL yok' }, () => {
-  // Sayılar tutup görüntü tutmuyorsa port yarım demektir; ajan ısı haritasına BAKIYOR.
+  // If the numbers match but the images do not, the port is half-done; the agent LOOKS at the heat map.
   for (const d of DURUMLAR) {
     const dt = tmp(d.ad + '-ts'), dp = tmp(d.ad + '-py');
     tsKos(d, dt); pythonKos(d, dp);
@@ -130,7 +132,7 @@ test('parite: hazır kırpmalar da aynı', { skip: !pilVar && 'PIL yok' }, () =>
 });
 
 test('parite: altın değerler — Python OLMADAN da korunuyor', () => {
-  assert.ok(existsSync(ALTIN), 'altin.json yok — `node test/fixtures/parite/uret.mjs` ile üret');
+  assert.ok(existsSync(ALTIN), 'altin.json yok — `node test/fixtures/parity/uret.mjs` ile üret');
   const altin = JSON.parse(readFileSync(ALTIN, 'utf8'));
   for (const d of DURUMLAR) {
     const ts = tsKos(d, tmp(d.ad + '-altin'));

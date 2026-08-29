@@ -1,13 +1,13 @@
 /**
- * GOLDEN TEST — Faz 1'in ana kabul ölçütü.
+ * GOLDEN TEST — Phase 1's main acceptance criterion.
  *
- * `fixtures/benchmark.json`'daki bilinen-doğru değerler BİREBİR üretilmeli (tolerans
- * yok — aynı kaynağın türevleri). İki `referans_duzeltmesi` özellikle kritik: eski araç
- * bunları piksel oturtmayla bulmuştu ve elle yazılmış referansın YANLIŞ olduğunu
- * kanıtlamıştı.
+ * The known-good values in `fixtures/benchmark.json` must be reproduced EXACTLY (no
+ * tolerance — they are derivatives of the same source). Two `referans_duzeltmesi`
+ * entries are especially critical: the old tool found them by pixel fitting and proved
+ * the hand-written reference WRONG.
  *
- * Tamamen ÇEVRİMDIŞI: kayıtlı AGC fixture'ları üzerinden koşar. Fixture yoksa
- * test ATLANIR ve sebebini söyler (sessizce geçmez).
+ * Fully OFFLINE: it runs against the recorded AGC fixtures. Without the fixtures the
+ * test is SKIPPED and says why (it does not pass silently).
  */
 import { test, skip } from 'node:test';
 import assert from 'node:assert/strict';
@@ -16,12 +16,12 @@ import { join } from 'node:path';
 import { flatten, toArtboardBox } from '../dist/lib.mjs';
 import { fileURLToPath } from 'node:url';
 
-const FIX = fileURLToPath(new URL('./fixtures/canli/', import.meta.url));
+const FIX = fileURLToPath(new URL('./fixtures/live/', import.meta.url));
 const BENCH = fileURLToPath(new URL('../../fixtures/benchmark.json', import.meta.url));
 
 const eksik = [];
 if (!existsSync(BENCH)) eksik.push('fixtures/benchmark.json');
-if (!existsSync(join(FIX, 'manifest.json'))) eksik.push('cli/test/fixtures/canli/manifest.json');
+if (!existsSync(join(FIX, 'manifest.json'))) eksik.push('cli/test/fixtures/live/manifest.json');
 
 if (eksik.length) {
   skip(`golden testi atlandı — eksik: ${eksik.join(', ')}. ` +
@@ -31,7 +31,7 @@ if (eksik.length) {
   const manifest = JSON.parse(readFileSync(join(FIX, 'manifest.json'), 'utf8')).manifest;
   const slug = (s) => s.toLocaleLowerCase('tr').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '');
 
-  /** Bir artboard'ı fixture'dan yükleyip artboard-göreli elemanlara çevirir. */
+  /** Loads an artboard from the fixtures and converts it into artboard-relative elements. */
   const yukle = (artboardId) => {
     const ab = manifest.artboards.find((a) => a.id === artboardId);
     if (!ab) return null;
@@ -66,7 +66,7 @@ if (eksik.length) {
     assert.ok(hit, `${b.desktop.eleman} ${x},${y} bulunamadı`);
     assert.equal(r2(hit.kutu.w), w);
     assert.equal(r2(hit.kutu.h), h);
-    // Eski araç bunu dpr-3 screenshot + en küçük karelerle 11.34 bulmuştu.
+    // The old tool found this as 11.34 with a dpr-3 screenshot and least squares.
     assert.deepEqual(hit.el.olcu.radius, [12, 12, 12, 12]);
     assert.equal(hit.el.olcu.radiusKaynak, 'yol');
     assert.equal(hit.el.dolgu, b.renk);
@@ -79,7 +79,7 @@ if (eksik.length) {
     const [x, y, w, h] = b.kutu;
     const hit = M.bul(b.eleman)[0];
     assert.ok(hit, `${b.eleman} bulunamadı`);
-    // Elle yazılan referans 343×95 diyordu; ölçüm 343×80 dedi ve ölçüm kazandı.
+    // The hand-written reference said 343×95; the measurement said 343×80, and the measurement won.
     assert.deepEqual([r2(hit.kutu.x), r2(hit.kutu.y), r2(hit.kutu.w), r2(hit.kutu.h)], [x, y, w, h]);
     assert.deepEqual(hit.el.olcu.radius, [b.radius, b.radius, b.radius, b.radius]);
   });
@@ -155,7 +155,7 @@ if (eksik.length) {
     const D = yukle(ekran('c').desktop.screen);
     const b = ekran('c').beklenen.kapatma_butonu;
     const hit = D.bul(b.eleman)[0];
-    // Eski araçta bu eleman "yalnız glif seçilebiliyor" diye ölçülemiyordu.
+    // In the old tool this element "could not be measured, only the glyph was selectable".
     assert.ok(hit, `${b.eleman} bulunamadı`);
     assert.deepEqual([r2(hit.kutu.w), r2(hit.kutu.h)], b.boyut);
     assert.equal(hit.el.kontur.genislik, 1);

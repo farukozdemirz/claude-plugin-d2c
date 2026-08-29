@@ -1,4 +1,4 @@
-/** Faz süresi ölçümü — özellikle iç içe fazların çift sayılmaması. */
+/** Phase duration measurement — especially that nested phases are not double counted. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { izlemeBaslat, izlemeJson, olc, fazlar, rapor } from '../dist/lib.mjs';
@@ -16,8 +16,8 @@ test('fazlar sırayla kaydedilir ve süre taşır', async () => {
 });
 
 test('İÇ İÇE fazlar çift SAYILMAZ', async () => {
-  // `cikarma` içinde `xd-shell` var. Derinlik olmasa ikisi toplanır ve
-  // "ölçülmeyen kalan" negatife düşerdi — rapor yanıltıcı olurdu.
+  // `cikarma` contains `xd-shell`. Without depth the two would be summed and the
+  // "unmeasured remainder" would go negative — the report would be misleading.
   izlemeBaslat();
   await olc('dis', async () => {
     await olc('ic', () => bekle(25));

@@ -1,9 +1,9 @@
 /**
- * Sözleşme smoke testi — AĞSIZ.
+ * Contract smoke test — NO NETWORK.
  *
- * Kabul ölçütü: *"haftalık smoke testi sözleşme bozulduğunda uyarıyor"*.
- * Burada "bozulma" senaryoları fixture üzerinde ÜRETİLİYOR; canlı linke bağlı
- * bir test, Adobe erişilemediğinde yeşil/kırmızı ayrımını kaybederdi.
+ * The acceptance criterion: *"the weekly smoke test warns when the contract breaks"*.
+ * The "breakage" scenarios are PRODUCED here on a fixture; a test depending on a live
+ * link would lose the green/red distinction whenever Adobe was unreachable.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,8 +11,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { degerlendir, smokeYaz } from '../dist/lib.mjs';
 
-// SENTETİK veri: kabul ölçütünü sınayan testler canlı fixture'a bağlı OLMAMALI.
-// `cli/test/fixtures/canli/` tasarım dosyasına özel ve .gitignore'da — CI'da yok.
+// SYNTHETIC data: the tests exercising the acceptance criterion must NOT depend on a
+// live fixture. `cli/test/fixtures/live/` is design-file specific and gitignored — it
+// does not exist in CI.
 const AGC = {
   version: '1.5.0',
   children: [{
@@ -73,7 +74,7 @@ test('BOZULMA: manifest.artboards boş → hata', () => {
 });
 
 test('BOZULMA: bilinmeyen AGC sürümü → uyarı, sessiz kalmaz', () => {
-  // Bu tam olarak "Adobe şemayı değiştirdi" hâli.
+  // This is exactly the "Adobe changed the schema" case.
   const s = degerlendir(proto(), { ...AGC, version: '9.9.9' }, null, 'x');
   assert.equal(s.seviye, 'uyari');
   assert.match(smokeYaz(s), /bilinmeyen sürüm "9\.9\.9"/);
@@ -118,8 +119,8 @@ test('rapor okunur ve seviyeyi başlıkta söyler', () => {
   assert.match(y, /✓ prototypeData/);
 });
 
-// ── Gerçek fixture varsa ek doğrulama (yoksa atlanır — CI'da yok) ────────────
-const FIX = fileURLToPath(new URL('./fixtures/canli/', import.meta.url));
+// ── extra verification when the real fixture is present (skipped otherwise — absent in CI) ──
+const FIX = fileURLToPath(new URL('./fixtures/live/', import.meta.url));
 const gercek = FIX + 'desktop-ürün-detay.agc.json';
 test('GERÇEK FIXTURE: canlı AGC sözleşmesi sağlam',
   { skip: !existsSync(gercek) && 'canlı fixture yok' }, () => {

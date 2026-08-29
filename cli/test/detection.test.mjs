@@ -1,13 +1,13 @@
 /**
- * Görsel diff'in NEYİ yakalayıp NEYİ gürültü saydığı — sabitlenir.
+ * WHAT the visual diff catches and WHAT it treats as noise — pinned down.
  *
- * §11'in "sentetik görsel diff" katmanı. Ana plan dört bozulma sayıyor:
- * 1px kaydırılmış · ellipsis eklenmiş · ikon değiştirilmiş · renk sapması.
- * `visual.test.mjs` ellipsis ve rengi kapsıyordu; kayma ve ikon burada.
+ * The "synthetic visual diff" layer of §11. The main plan lists four corruptions:
+ * shifted by 1px · an ellipsis added · an icon changed · a colour deviation.
+ * `visual.test.mjs` covered the ellipsis and the colour; the shift and the icon are here.
  *
- * PIL KULLANILMIYOR: görüntüler kendi piksel katmanımızla üretiliyor. Faz 5b'den
- * sonra PIL bir önkoşul değil; PIL'e bağlı bir test CI'da sessizce atlanır ve
- * "kapsandı" yanılsaması bırakırdı.
+ * PIL IS NOT USED: the images are produced with our own pixel layer. After Phase 5b PIL
+ * is not a prerequisite; a PIL-dependent test would be silently skipped in CI and leave
+ * the illusion of coverage.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -34,19 +34,19 @@ const daire = (im, cx, cy, yc, r, g, b) => {
 };
 
 /**
- * Kart benzeri sayfa. `kaydir` her şeyi 1px sağa iter (alt-piksel kayma taklidi),
- * `ikon` "daire" veya "kare" — ikonun DEĞİŞMESİ hâli.
+ * A card-like page. `kaydir` pushes everything 1px to the right (imitating a sub-pixel
+ * shift); `ikon` is "daire" or "kare" — the case where the icon CHANGES.
  */
 function sayfa({ kaydir = 0, ikon = 'daire' } = {}) {
   const im = bosImg(G, Y);
   doldur(im, 250, 250, 250);
   kutu(im, 8 + kaydir, 8, 232 + kaydir, 152, 255, 255, 255);
-  // metin benzeri yüksek frekanslı içerik — 1px kayma burada en çok gürültü üretir
+  // text-like high-frequency content — a 1px shift produces the most noise here
   for (let s = 0; s < 7; s++) {
     const y = 60 + s * 12;
     for (let x = 16 + kaydir; x < 224 + kaydir; x += 3) kutu(im, x, y, x + 2, y + 6, 90, 90, 96);
   }
-  // ikon — sağ üstte, bilinen bir ızgara hücresinde
+  // the icon — top right, in a known grid cell
   const cx = 200 + kaydir, cy = 30;
   if (ikon === 'daire') daire(im, cx, cy, 12, 12, 35, 128);
   else kutu(im, cx - 12, cy - 12, cx + 12, cy + 12, 12, 35, 128);
@@ -56,9 +56,10 @@ function sayfa({ kaydir = 0, ikon = 'daire' } = {}) {
 function karsilastir(a, b, ad) {
   const ya = join(dizin, `${ad}-a.png`), yb = join(dizin, `${ad}-b.png`);
   pngYaz(ya, a); pngYaz(yb, b);
-  // Kutular AÇIKÇA veriliyor. Kutusuz çağrıda motor `trim_uniform` uygular ve
-  // iki görüntüyü içeriğin sınır kutusuna kırpar — saf bir ötelemeyi hizalayıp
-  // GÖRÜNMEZ kılar (ölçüldü: kaymada ham %0). Gerçek akış da her zaman kutu verir.
+  // The boxes are given EXPLICITLY. Called without boxes, the engine applies
+  // `trim_uniform` and crops both images to the bounding box of their content — which
+  // realigns a pure translation and makes it INVISIBLE (measured: raw 0% for the shift).
+  // The real flow always passes boxes too.
   return motorCalistir({
     xdPng: ya, renderPng: yb, out: join(dizin, `${ad}-fark.png`),
     xdKutu: [0, 0, G, Y], renderKutu: [0, 0, G, Y],
@@ -77,8 +78,8 @@ test('aynı görüntü → hiçbir şey yakalanmaz', () => {
 });
 
 test('1px KAYMA gürültü sayılır — yapısal fark düşük kalır', () => {
-  // Yapısal karşılaştırmanın varlık sebebi: 4× küçültme alt-piksel kaymayı eritir.
-  // Ham fark yüksek olabilir; KARAR yapısala bakar.
+  // The reason the structural comparison exists: a 4× downscale dissolves a sub-pixel
+  // shift. The raw difference may be high; the DECISION looks at the structural one.
   assert.ok(kayma.ham > 5, `ham ${kayma.ham} — kayma ham farkta görünmeli`);
   assert.ok(kayma.yapisal < 2, `yapısal ${kayma.yapisal} — kayma yapısalda ERİMELİ`);
 });
@@ -86,7 +87,7 @@ test('1px KAYMA gürültü sayılır — yapısal fark düşük kalır', () => {
 test('İKON DEĞİŞİMİ yakalanır ve ikonun bulunduğu bölgeye lokalize olur', () => {
   assert.ok(ikon.yapisal > 0, `yapısal ${ikon.yapisal}`);
   assert.ok(ikon.bolgeler.length > 0, 'sapan bölge bildirilmeli');
-  // İkon x≈188-212, y≈18-42 → 8×8 ızgarada sütun 6, satır 0-1.
+  // The icon is at x≈188-212, y≈18-42 → column 6, rows 0-1 on an 8×8 grid.
   const [W, H] = ikon.boyut;
   const gw = Math.floor(W / 8), gh = Math.floor(H / 8);
   const beklenen = ikon.bolgeler.some(
@@ -96,15 +97,15 @@ test('İKON DEĞİŞİMİ yakalanır ve ikonun bulunduğu bölgeye lokalize olur
 });
 
 test('AYIRT EDİCİLİK yüzdede DEĞİL, bölge dağılımında', () => {
-  // ÖLÇÜLDÜ: kayma yapısal %0,83 · ikon yapısal %0,79 — yüzde ikisini SIRALAMIYOR.
-  // Yapısal yüzde alan ağırlıklı: 24×24'lük bir ikon 240×160'lık bir sayfanın
-  // %1,5'i. Küçük ama önemli bir fark, sayfa geneline yayılan bir alt-piksel
-  // kaymadan DÜŞÜK yüzde verebilir.
+  // MEASURED: shift structural 0.83% · icon structural 0.79% — the percentage does NOT
+  // RANK them. The structural percentage is area weighted: a 24×24 icon is 1.5% of a
+  // 240×160 page. A small but important difference can score LOWER than a sub-pixel
+  // shift spread across the whole page.
   //
-  // Deponun "yüzde bir geçme notu değil, karar bölge incelemesine dayanır"
-  // kuralının somut kanıtı bu. Ayrım iki yerde:
-  //   1) bölge SAYISI  — kayma yayılır, ikon toplanır
-  //   2) bölge KONUMU  — ikonunkiler tek sütunda kümelenir
+  // This is concrete evidence for the repo's rule that "the percentage is not a pass
+  // mark, the decision rests on region inspection". The discriminator is in two places:
+  //   1) the NUMBER of regions — the shift spreads, the icon clusters
+  //   2) the POSITION of regions — the icon's are clustered in a single column
   assert.ok(
     kayma.bolgeler.length > 3 * ikon.bolgeler.length,
     `kayma ${kayma.bolgeler.length} bölge · ikon ${ikon.bolgeler.length} bölge — yayılma farkı yok`
@@ -114,13 +115,13 @@ test('AYIRT EDİCİLİK yüzdede DEĞİL, bölge dağılımında', () => {
   assert.ok(sutunlar(ikon).size <= 2, `ikon bölgeleri ${sutunlar(ikon).size} sütuna yayılmış — kümelenmeli`);
   assert.ok(sutunlar(kayma).size >= 6, `kayma ${sutunlar(kayma).size} sütunda — sayfaya yayılmalı`);
 
-  // Ham fark ise TERS sıralıyor: kayma hamda görünür, ikon değişimi neredeyse görünmez.
+  // The raw difference ranks them the OTHER way: the shift shows up in raw, the icon change barely does.
   assert.ok(kayma.ham > 10 && ikon.ham < 1,
     `ham: kayma ${kayma.ham} · ikon ${ikon.ham}`);
 });
 
 test('ölçülen değerler kayıt altında (gerileme olursa görünür)', () => {
-  // Sayılar sabitleniyor: eşik/filtre ileride değişirse test bunu söyler.
+  // The numbers are pinned: if a threshold or filter changes later, the test says so.
   assert.equal(kayma.boyut[0], G);
   assert.equal(ikon.boyut[0], G);
   console.log(

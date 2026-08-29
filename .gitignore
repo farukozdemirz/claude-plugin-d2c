@@ -8,4 +8,4 @@ fixtures/acceptance-test.md
 
 # Canlı AGC fixture'ları tasarım dosyasına özel (benchmark.json ile aynı politika).
 cli/node_modules/
-cli/test/fixtures/canli/
+cli/test/fixtures/live/

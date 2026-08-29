@@ -1,6 +1,6 @@
 /**
- * Ana planın iki güvenlik kabul kuralının testi.
- * Bunlar "iyi olurdu" değil, Faz 1'in KABUL ÖLÇÜTÜ.
+ * Tests for the main plan's two security acceptance rules.
+ * These are not "nice to have" — they are Phase 1's ACCEPTANCE CRITERIA.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -21,24 +21,24 @@ function allFiles(dir) {
   return out;
 }
 
-// ── KURAL 1: uzak JS asla çalıştırılmaz ──────────────────────────────────────
+// ── RULE 1: remote JS is never executed ──────────────────────────────────────
 test('KURAL 1 — kaynakta eval / new Function / vm / dinamik import YOK', () => {
   const yasak = [
     { re: /\beval\s*\(/, ad: 'eval(' },
     { re: /new\s+Function\s*\(/, ad: 'new Function(' },
     { re: /require\s*\(\s*['"]vm['"]\s*\)/, ad: "require('vm')" },
     { re: /from\s+['"]node:vm['"]/, ad: "import node:vm" },
-    // HESAPLANMIŞ specifier'lı dinamik import — `import(degisken)`.
-    // Literal specifier (`import('playwright-core')`) YASAK DEĞİL: bilinen bir npm
-    // paketini opsiyonel bağımlılık olarak yüklemenin standart yolu ve uzak içerik
-    // çalıştırmıyor. Kural 1'in yasakladığı şey UZAK İÇERİĞİN çalıştırılması.
+    // A dynamic import with a COMPUTED specifier — `import(variable)`.
+    // A literal specifier (`import('playwright-core')`) is NOT FORBIDDEN: it is the
+    // standard way to load a known npm package as an optional dependency and it does not
+    // execute remote content. What Rule 1 forbids is executing REMOTE CONTENT.
     { re: /\bimport\s*\(\s*(?!['"])/, ad: 'dinamik import( hesaplanmış specifier ile' },
   ];
   const ihlal = [];
   for (const f of allFiles(SRC)) {
     const src = readFileSync(f, 'utf8');
     for (const { re, ad } of yasak) {
-      // Yorum satırlarında geçmesi sorun değil; kod satırında olmamalı.
+      // Appearing in comments is fine; it must not appear in a code line.
       const kodSatirlari = src.split('\n').filter((l) => !/^\s*(\*|\/\/)/.test(l)).join('\n');
       if (re.test(kodSatirlari)) ihlal.push(`${f.replace(SRC, '')}: ${ad}`);
     }
@@ -47,16 +47,16 @@ test('KURAL 1 — kaynakta eval / new Function / vm / dinamik import YOK', () =>
 });
 
 test('KURAL 1 — dinamik import YALNIZ literal paket adıyla kullanılıyor', () => {
-  // Kuralın amacı uzak içeriğin çalıştırılmaması. Literal specifier'lı import
-  // (opsiyonel bağımlılık yükleme) buna aykırı değil; ama specifier hesaplanmışsa
-  // kaynağı denetleyemeyiz ve yasaktır.
+  // The point of the rule is that remote content is not executed. An import with a
+  // literal specifier (loading an optional dependency) does not violate it; but when the
+  // specifier is computed we cannot audit its source, and that is forbidden.
   const literaller = [];
   for (const f of allFiles(SRC)) {
     for (const m of readFileSync(f, 'utf8').matchAll(/\bimport\s*\(\s*(['"])([^'"]+)\1/g)) {
       literaller.push(m[2]);
     }
   }
-  // Hepsi bilinen paket adı olmalı — URL, yol birleştirme veya değişken yok.
+  // All of them must be known package names — no URL, path joining or variable.
   for (const spec of literaller) {
     assert.ok(
       /^[a-z@][a-z0-9@/._-]*$/i.test(spec) && !spec.includes('://'),
@@ -78,9 +78,10 @@ test('KURAL 1 — zararlı yük yan etki üretmeden reddedilir', () => {
   assert.equal(globalThis.__SIZINTI, undefined, 'uzak kod ÇALIŞTIRILDI — Kural 1 ihlali');
 });
 
-// ── KURAL 2: access_token hiçbir yere yazılmaz ───────────────────────────────
-// SAHTE-TOKEN: yapısı gerçeğiyle aynı, değeri uydurma. Gerçek bir token buraya
-// yazılamaz (Kural 2) — `token-scan.test.mjs` bu işareti arar ve yalnız onu geçirir.
+// ── RULE 2: the access_token is written nowhere ──────────────────────────────
+// SAHTE-TOKEN: the structure matches a real one, the value is made up. A real token can
+// never be written here (Rule 2) — `token-scan.test.mjs` looks for this marker and lets
+// only that through.
 const TOKEN = '1700000000_urn:aaid:sc:XX:00000000-0000-4000-8000-000000000000;public_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const URL_ORNEK = `https://cdn-sharing.adobecc.com/content/storage/id/urn:x;revision=0?component_id=c1&api_key=CometServer1&access_token=${encodeURIComponent(TOKEN)}`;
 

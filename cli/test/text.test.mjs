@@ -4,7 +4,7 @@ import { measureText, lineHeightFrom, fontBoxFrom, ascentFrom, textWidthFrom, ar
 
 const satir = (position, right, ascent, descent) => ({ position, layoutBounds: { left: 0, right, ascent, descent } });
 
-/** GERÇEK veri: "Benzer \nÜrünler", Bw Modelica Medium 14px, iki satır. */
+/** REAL data: "Benzer \nÜrünler", Bw Modelica Medium 14px, two lines. */
 const ikiSatir = {
   type: 'text', name: 'Benzer \nÜrünler',
   meta: { ux: {

@@ -1,4 +1,4 @@
-/** Görsel karşılaştırma testleri — sentetik PNG çiftleri, AĞ YOK. */
+/** Visual comparison tests — synthetic PNG pairs, NO NETWORK. */
 import { test, skip } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -13,7 +13,7 @@ const SCRIPT = fileURLToPath(new URL('../../skills/d2c-code/scripts/visual-diff.
 let pilVar = true;
 try { execFileSync('python3', ['-c', 'import PIL'], { stdio: 'ignore' }); } catch { pilVar = false; }
 
-/** Basit PNG üretici — PIL ile, ek JS bağımlılığı olmadan. */
+/** A simple PNG generator — via PIL, without an extra JS dependency. */
 function uret(dir, ad, cizim) {
   const yol = join(dir, ad);
   execFileSync('python3', ['-c', `
@@ -55,13 +55,13 @@ if (!pilVar) {
   });
 
   test('EKLENEN ELLIPSIS yakalanır ve LOKALİZE edilir', () => {
-    // Bilinen bulgu sınıfı: line-clamp'ın eklediği "…"
+    // A known finding class: the "…" that line-clamp adds
     const r = calistir(uret(dir, 'ellipsis.png', TEMEL + `
 d.text((16,40), "...", fill=(65,65,65))
 `));
     assert.ok(r.bolgeler.length > 0, 'ellipsis bulunamadı');
     const b = r.bolgeler[0];
-    // Izgara hücresi metnin bulunduğu bölgeyi göstermeli (sol üst çeyrek)
+    // The grid cell must point at the region containing the text (top-left quadrant)
     assert.ok(b.kutu[0] < 100 && b.kutu[1] < 80, `yanlış bölge: ${JSON.stringify(b.kutu)}`);
   });
 
@@ -84,14 +84,14 @@ for i in range(0, 200, 20):
     assert.ok(kirpmalar.length <= 4, `${kirpmalar.length} kırpma — bütçe 4`);
     assert.ok(kirpmalar.length > 0, 'hiç kırpma yok');
     for (const k of kirpmalar) assert.ok(existsSync(k.kirpma), `dosya yok: ${k.kirpma}`);
-    // Bütçe dışı bölgeler GİZLENMEZ — listede kalır, yalnız kırpması yoktur.
+    // Regions beyond the budget are NOT HIDDEN — they stay in the list, they just have no crop.
     assert.ok(r.bolgeler.length >= kirpmalar.length);
   });
 
 
   test('MOTOR: python yolu KORUNUYOR ve aynı sayıları veriyor', () => {
-    // Faz 5b portu Python'u silmedi. Geri dönüş yolu çalışmazsa "korundu" demek
-    // boş bir iddia olur — burada gerçekten çalıştırılıyor.
+    // The Phase 5b port did not delete Python. If the fallback path does not work,
+    // saying "it is preserved" is an empty claim — so it is actually executed here.
     const b = uret(dir, 'motor.png', TEMEL.replace('(12,35,128))\n', '(255,0,0))\n'));
     const ts = calistir(b, { motor: 'ts' });
     const py = calistir(b, { motor: 'python' });
@@ -116,7 +116,7 @@ for i in range(0, 200, 20):
   });
 
   test('yapısal eşik aşılınca ÇIKIŞ 1 — hata değil, bulgudur', () => {
-    // Tamamen farklı görüntü: script exit 1 verir; sarmalayıcı bunu hata saymamalı.
+    // A completely different image: the script exits 1; the wrapper must not treat that as an error.
     const r = calistir(uret(dir, 'bambaska.png', `d.rectangle([0,0,200,120], fill=(0,0,0))`));
     assert.ok(r.yapisal > 8, `yapısal ${r.yapisal} — eşiği aşmalıydı`);
     assert.ok(r.bolgeler.length > 0);

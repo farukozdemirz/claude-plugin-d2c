@@ -1,4 +1,4 @@
-/** Varlık export'u testleri — SVG üretimi ve görsel indirme. */
+/** Asset export tests — SVG generation and image download. */
 import { test, skip } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, readdirSync, existsSync } from 'node:fs';
@@ -31,7 +31,7 @@ test('çok yollu grup TEK SVG de birleşir, yollar grup-yerele çevrilir', () =>
   const b = sekil({ id: 'b', matrix: [1, 0, 0, 1, 110, 200], yol: 'M 0 0 L 5 5' });
   const r = svgUret([a, b], 'coklu');
   assert.equal((r.svg.match(/<path/g) ?? []).length, 2);
-  // b, a'ya göre 10 px sağda → yerel koordinatta 10'dan başlamalı
+  // b is 10 px to the right of a → in local coordinates it must start at 10
   assert.match(r.svg, /d="M 10 0 L 15 5"/);
   assert.deepEqual(r.kutu, [0, 0, 15, 10]);
 });
@@ -106,9 +106,9 @@ test('slug Türkçe karakterleri çevirir', () => {
   assert.equal(slug('***'), 'varlik');
 });
 
-// ── gerçek fixture ────────────────────────────────────────────────────────────
-// fileURLToPath şart: dosya adındaki `ü` URL pathname'inde yüzde-kodlanıyor.
-const FIX = fileURLToPath(new URL('./fixtures/canli/desktop-ürün-detay.agc.json', import.meta.url));
+// ── real fixture ──────────────────────────────────────────────────────────────
+// fileURLToPath is required: the `ü` in the filename gets percent-encoded in a URL pathname.
+const FIX = fileURLToPath(new URL('./fixtures/live/desktop-ürün-detay.agc.json', import.meta.url));
 if (!existsSync(FIX)) {
   skip('gerçek fixture testi atlandı — canlı AGC yok');
 } else {
@@ -118,9 +118,9 @@ if (!existsSync(FIX)) {
     const r = svgleriYaz(elemanlar, dir);
     const ui = r.svgler.find((s) => s.ad === 'user-icon');
     assert.ok(ui, 'user-icon SVG si yok');
-    // AGC kaynak verisi 18×19 diyor. limitations.md'deki "hedef 19×19" ELLE yazılmış
-    // bir referanstı; araç iki görsel diff turunda 18×19'a ulaşıp "1px artık" diye
-    // raporlamıştı — o artık YOKTU, referans yanlıştı.
+    // The AGC source data says 18×19. The "target 19×19" in limitations.md was a
+    // HAND-WRITTEN reference; the tool reached 18×19 over two visual diff rounds and
+    // reported a "1px residual" — that residual did NOT EXIST, the reference was wrong.
     assert.deepEqual([ui.kutu[2], ui.kutu[3]], [18, 19]);
     assert.ok(ui.kullanim >= 2, `carousel de tekrar eden ikon tekilleşmeli (${ui.kullanim})`);
     const s = readFileSync(ui.dosya, 'utf8');
@@ -139,8 +139,8 @@ if (!existsSync(FIX)) {
 
 // ── compound → fill-rule ─────────────────────────────────────────────────────
 test('compound SVG i evenodd ile çıkar (delik dolmasın)', () => {
-  // XD `exclude`/`subtract` sonucu tek bir path'te iki kontur olarak gelir.
-  // SVG varsayılanı `nonzero` deliği DOLDURUR — donut şekli dolu daire görünürdü.
+  // XD's `exclude`/`subtract` result arrives as two contours in a single path.
+  // SVG's default `nonzero` FILLS the hole — a donut would look like a solid circle.
   const r = svgUret([sekil({
     sekilTipi: 'compound',
     yol: 'M 0 0 L 24 0 L 24 24 L 0 24 Z M 8 8 L 16 8 L 16 16 L 8 16 Z',

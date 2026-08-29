@@ -60,7 +60,7 @@ test('componentUrl ;revision=0 ve component_id kullanır (component_path DEĞİL
   assert.ok(!u.includes('component_path'), 'component_path 400 döner, kullanılmamalı');
 });
 
-// ── platform ayrımı ve eşleştirme benzersizliği (POC-2 bulgusu) ───────────────
+// ── platform separation and pairing uniqueness (the POC-2 finding) ───────────
 import { platformOf } from '../dist/lib.mjs';
 
 test('platformOf: app AYRI platform, mobil ile birleştirilmez', () => {

@@ -1,4 +1,4 @@
-/** Piksel katmanı birim testleri — PNG G/Ç, kırpma, Lanczos, yuvarlama. */
+/** Pixel layer unit tests — PNG I/O, cropping, Lanczos, rounding. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { bosImg, doldur, kirp, luma, nearest, olcekle, pngOku, pngYaz, yapistir, pyRound }
   from '../dist/lib.mjs';
 
-const FIX = fileURLToPath(new URL('./fixtures/parite/', import.meta.url));
+const FIX = fileURLToPath(new URL('./fixtures/parity/', import.meta.url));
 const tmp = () => mkdtempSync(join(tmpdir(), 'd2c-pixel-'));
 
 let pilVar = true;
@@ -31,9 +31,9 @@ test('kırpma sınır dışını SİYAHLA doldurur (PIL davranışı)', () => {
   doldur(im, 200, 100, 50);
   const c = kirp(im, -2, -2, 2, 2);
   assert.deepEqual([c.w, c.h], [4, 4]);
-  // sol-üst çeyrek sınır dışı → siyah
+  // the top-left quadrant is out of bounds → black
   assert.deepEqual([c.data[0], c.data[1], c.data[2]], [0, 0, 0]);
-  // sağ-alt çeyrek görüntünün içinden geliyor
+  // the bottom-right quadrant comes from inside the image
   const p = (3 * 4 + 3) * 3;
   assert.deepEqual([c.data[p], c.data[p + 1], c.data[p + 2]], [200, 100, 50]);
 });
@@ -41,7 +41,7 @@ test('kırpma sınır dışını SİYAHLA doldurur (PIL davranışı)', () => {
 test('luma = PIL convert("L") tamsayı formülü', () => {
   assert.equal(luma(0, 0, 0), 0);
   assert.equal(luma(255, 255, 255), 255);
-  // (0*19595 + 0*38470 + 1*7471 + 32768) >> 16 = 0 — küçük mavi farkı ERİR
+  // (0*19595 + 0*38470 + 1*7471 + 32768) >> 16 = 0 — a small blue difference DISSOLVES
   assert.equal(luma(0, 0, 1), 0);
   assert.equal(luma(128, 128, 128), 128);
 });
@@ -100,7 +100,7 @@ test('yapıştırma hedef sınırını taşmaz', () => {
 });
 
 test('pyRound = Python round() (bankacı yuvarlaması)', () => {
-  // Math.round bunların yarısını yanlış verir; kırpma sınırında 1px kayma demek.
+  // Math.round gets half of these wrong; that means a 1px shift at a crop boundary.
   assert.equal(pyRound(0.5), 0);
   assert.equal(pyRound(1.5), 2);
   assert.equal(pyRound(2.5), 2);

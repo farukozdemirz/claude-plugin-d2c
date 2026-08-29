@@ -1,29 +1,30 @@
 #!/usr/bin/env node
 /**
- * Claude Code transcript'lerinden ARAÇ ÇAĞRISI sayar.
+ * Counts TOOL CALLS from Claude Code transcripts.
  *
- * Neden: d2c boru hattında süre ≈ araç çağrısı × ~15 sn. Asıl kaldıraç çağrı sayısı,
- * ama `runs.jsonl` bugün yalnız süreyi tutuyor. Modele kendini saydırmak kırılgan;
- * transcript'te `tool_use` blokları zaten duruyor ve deterministik olarak sayılabilir.
+ * Why: in the d2c pipeline time ≈ tool calls × ~15 s. The real lever is the call count,
+ * but `runs.jsonl` currently records only the duration. Asking the model to count itself
+ * is fragile; the `tool_use` blocks are already in the transcript and can be counted
+ * deterministically.
  *
- * Alt ajanlar ayrı transcript'lere yazılıyor (`subagents/agent-*.jsonl`) ve yanlarındaki
- * `agent-*.meta.json` `agentType` taşıyor — design-diff / visual-diff turlarının
- * maliyeti bu sayede ajan tipine atfedilebiliyor.
+ * Subagents write to separate transcripts (`subagents/agent-*.jsonl`) and the
+ * `agent-*.meta.json` next to them carries `agentType` — which is how the cost of
+ * design-diff / visual-diff rounds can be attributed to an agent type.
  *
- * Kullanım:
- *   count-tool-calls.mjs --project <proje-dizini> [--since ISO] [--until ISO] [--json]
+ * Usage:
+ *   count-tool-calls.mjs --project <project-dir> [--since ISO] [--until ISO] [--json]
  *   count-tool-calls.mjs --session <transcript.jsonl> [...]
- *   count-tool-calls.mjs --project <dizin> --split-on-d2c     # /d2c komutlarına göre böl
+ *   count-tool-calls.mjs --project <dir> --split-on-d2c     # split by /d2c commands
  *
- * --project: ~/.claude/projects/<kodlanmis-proje-yolu>/ dizini.
- *            Kısayol: gerçek proje yolu verilirse kodlanmış ada kendisi çevirir.
+ * --project: the ~/.claude/projects/<encoded-project-path>/ directory.
+ *            Shortcut: given a real project path, it converts to the encoded name itself.
  */
 
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { homedir } from 'node:os';
 
-// ── argümanlar ────────────────────────────────────────────────────────────────
+// ── arguments ─────────────────────────────────────────────────────────────────
 function parseArgs(argv) {
   const a = { json: false, splitOnD2c: false };
   for (let i = 0; i < argv.length; i++) {
@@ -40,14 +41,14 @@ function parseArgs(argv) {
   return a;
 }
 
-/** Gerçek proje yolunu Claude Code'un transcript dizin adına çevirir. */
+/** Converts a real project path into Claude Code's transcript directory name. */
 function encodeProjectPath(p) {
   return p.replace(/\//g, '-');
 }
 
 function resolveProjectDir(input) {
   if (existsSync(input) && statSync(input).isDirectory()) {
-    // Zaten transcript dizini mi? İçinde *.jsonl varsa öyle kabul et.
+    // Is it already a transcript directory? If it contains *.jsonl, treat it as one.
     const hasTranscripts = readdirSync(input).some((f) => f.endsWith('.jsonl'));
     if (hasTranscripts) return input;
   }
@@ -56,9 +57,9 @@ function resolveProjectDir(input) {
   throw new Error(`transcript dizini bulunamadı: ${input}\n  denenen: ${encoded}`);
 }
 
-// ── transcript okuma ──────────────────────────────────────────────────────────
+// ── reading transcripts ───────────────────────────────────────────────────────
 /**
- * Bir .jsonl transcript'ini okur. Bozuk satırları ATLAR ve sayar — sessizce yutmaz.
+ * Reads a .jsonl transcript. Malformed lines are SKIPPED and counted — never swallowed.
  * @returns {{events: Array, skipped: number}}
  */
 function readTranscript(file) {
@@ -84,7 +85,7 @@ function readTranscript(file) {
   return { events, skipped };
 }
 
-/** Bir kayıttaki tool_use bloklarının araç adlarını döndürür. */
+/** Returns the tool names of the tool_use blocks in a record. */
 function toolNames(rec) {
   const content = rec?.message?.content;
   if (!Array.isArray(content)) return [];
@@ -97,7 +98,7 @@ function toolNames(rec) {
   return out;
 }
 
-/** Kullanıcı mesajının düz metni (komut tespiti için). */
+/** The plain text of a user message (for command detection). */
 function userText(rec) {
   if (rec?.type !== 'user') return null;
   const c = rec?.message?.content;
@@ -135,7 +136,7 @@ function collectSession(sessionFile, opts) {
       if (!last || ts > last) last = ts;
     }
     const txt = userText(rec);
-    // Sidechain (alt ajan) kayıtları ana döngüye sayılmaz; onlar ayrı dosyada zaten.
+    // Sidechain (subagent) records do not count toward the main loop; they are in a separate file.
     if (txt && !rec.isSidechain) {
       const m = txt.match(/(^|\s)\/(d2c(?:-spec|-code|-verify)?)\b/);
       if (m) d2cMarks.push({ ts, cmd: `/${m[2]}`, snippet: txt.slice(0, 120).replace(/\s+/g, ' ') });
@@ -172,7 +173,7 @@ function collectSubagents(sessionFile, opts) {
       try {
         meta = JSON.parse(readFileSync(metaFile, 'utf8'));
       } catch {
-        /* meta okunamadıysa agentType bilinmez — sessiz geçme, aşağıda '?' olarak görünür */
+        /* if the meta could not be read the agentType is unknown — do not pass over it silently, it shows up as '?' below */
       }
     }
     const { events, skipped } = readTranscript(agentFile);
@@ -227,7 +228,7 @@ function summarizeAgents(agents) {
       toplamCagri: e.cagri,
       turBasinaCagri: +(e.cagri / e.tur).toFixed(1),
       turBasinaSureSnOrtanca: s.length ? s[Math.floor(s.length / 2)] : null,
-      // 0 sn gerçek bir ölçüm — `|| null` onu "bilinmiyor"a çevirirdi.
+      // 0 s is a real measurement — `|| null` would turn it into "unknown".
       toplamSureSn: s.length ? e.sureler.reduce((a, b) => a + b, 0) : null,
     };
   }

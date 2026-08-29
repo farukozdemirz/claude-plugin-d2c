@@ -1,6 +1,6 @@
 /**
- * Render doğrulama testleri — GERÇEK tarayıcı, AMA AĞ YOK.
- * Statik HTML fixture'ları `file://` ile açılır.
+ * Render verification tests — a REAL browser, BUT NO NETWORK.
+ * Static HTML fixtures are opened over `file://`.
  */
 import { test, before, after, skip } from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,11 +12,11 @@ import {
   pariteHesapla, dogrula, testidKontrol, KABUL_SEBEPLERI,
 } from '../dist/lib.mjs';
 
-const SAYFA = fileURLToPath(new URL('./fixtures/sayfa/', import.meta.url));
+const SAYFA = fileURLToPath(new URL('./fixtures/page/', import.meta.url));
 const url = (f) => `file://${join(SAYFA, f)}`;
 
-// Modülün kurulu olması yetmez: sistemde açılabilir bir Chrome de olmalı.
-// Yalnız import'a bakmak, Chrome'suz bir CI'da testleri ATLAMAK yerine KIRIYORDU.
+// Having the module installed is not enough: there must also be a launchable Chrome.
+// Looking only at the import was BREAKING the tests on a Chrome-less CI instead of SKIPPING them.
 let pwVar = true;
 let pwNeden = 'playwright-core yok';
 try {
@@ -28,7 +28,7 @@ try {
   pwNeden = `tarayıcı açılamadı: ${String(e.message ?? e).split('\n')[0]}`;
 }
 
-// ── saf fonksiyonlar (tarayıcısız) ────────────────────────────────────────────
+// ── pure functions (no browser) ───────────────────────────────────────────────
 const hedefEl = (over = {}) => ({
   id: 'e', ad: 'Kart', tip: 'rect', rol: null, testid: 'kart', ebeveyn: null, sira: 0,
   desktop: { kutu: [0, 0, 316, 204], radius: [12, 12, 12, 12], radiusKaynak: 'rect',
@@ -66,7 +66,7 @@ test('kabul edilen sapma SINIRLI — sınır içi kabul', () => {
 });
 
 test('kabul edilen sapma SINIRSIZ DEĞİL — büyük fark GİZLENMEZ', () => {
-  // Bu gerçekten oldu: ilk implementasyonda 1664px fark "kabul" çıkıyordu.
+  // This actually happened: in the first implementation a 1664px difference came out as "kabul".
   const r = elemaniKarsilastir(hedefEl(), olculenEl({ w: 1440 }), ctx(['border-box']));
   const f = r.farklar.find((x) => x.alan === 'genişlik');
   assert.equal(f.durum, 'sapan', 'sınırı aşan fark KABUL sayılmamalı');
@@ -129,11 +129,12 @@ test('POC-4: AGC karşılığı olmayan aile güvenli tarafta kalır', () => {
 });
 
 /**
- * Kaydırma çubuğu telafisi — sahte Page ile.
+ * Scrollbar compensation — with a fake Page.
  *
- * Gerçek tarayıcıda bu dal, çalıştıran makinenin kaydırma çubuğu rejimine bağlı
- * (overlay çubukta hiç tetiklenmiyor). Ortama bağlı bir testin "yeşil" olması
- * dalın çalıştığını KANITLAMAZ — bu yüzden dal burada doğrudan koşuluyor.
+ * In a real browser this branch depends on the scrollbar regime of the machine running
+ * it (with an overlay scrollbar it never triggers). An environment-dependent test being
+ * "green" does NOT PROVE the branch runs — which is why the branch is exercised directly
+ * here.
  */
 function sahtePage(clientWidthFn) {
   let w = 0;
@@ -146,7 +147,7 @@ function sahtePage(clientWidthFn) {
 }
 
 test('telafi: klasik kaydırma çubuğu 15px yiyorsa emülasyon büyütülür', async () => {
-  // clientWidth = emüle - 15  → 1440 istemek için 1455 emüle edilmeli
+  // clientWidth = emulated - 15 → to get 1440 we must emulate 1455
   const p = sahtePage((w) => w - 15);
   const v = await viewportAyarla(p, 1440);
   assert.deepEqual(p.gecmis, [1440, 1455], 'önce hedef, sonra telafili denenmeli');
@@ -164,7 +165,7 @@ test('telafi: overlay çubukta GEREKSİZ telafi yapılmaz', async () => {
 });
 
 test('telafi TUTMAZSA ölçüm yapılmaz — sessizce yanlış viewport yok', async () => {
-  // Beklenmedik bir çubuk genişliği (ör. 17px): telafi hedefi tutturamaz.
+  // An unexpected scrollbar width (e.g. 17px): the compensation cannot hit the target.
   const p = sahtePage((w) => w - 17);
   const v = await viewportAyarla(p, 1440);
   assert.equal(v.dogrulandi, false);
@@ -172,7 +173,7 @@ test('telafi TUTMAZSA ölçüm yapılmaz — sessizce yanlış viewport yok', as
   assert.match(viewportHatasi(v), /1438/);
 });
 
-// ── gerçek tarayıcı ───────────────────────────────────────────────────────────
+// ── real browser ──────────────────────────────────────────────────────────────
 if (!pwVar) {
   skip(`tarayıcı testleri atlandı — ${pwNeden}`);
 } else {
@@ -194,14 +195,14 @@ if (!pwVar) {
   });
 
   test('TARAYICI: DİKEY taşan sayfa hedef genişlikte ölçülür', async () => {
-    // troubleshooting.md'nin kayıtlı tuzağı: klasik kaydırma çubuğu ~15px yer kapar,
-    // 1440'lık ölçüm 1425 çıkar, 1312'lik bar 1297 görünür.
+    // The trap recorded in troubleshooting.md: a classic scrollbar takes ~15px, a 1440
+    // measurement reads 1425, and a 1312 bar looks like 1297.
     //
-    // ÖLÇÜLDÜ: bu (headless) Chrome OVERLAY kaydırma çubuğu kullanıyor — genişlik
-    // yemiyor, dolayısıyla telafi TETİKLENMİYOR. Tuzak klasik çubuklu ortamlara
-    // (headed Chrome) özgü. Bu yüzden burada telafinin UYGULANDIĞI değil, SONUCUN
-    // her iki rejimde de doğru olduğu iddia ediliyor; telafi dalının kendisi
-    // aşağıdaki sahte-Page testinde deterministik olarak koşuyor.
+    // MEASURED: this (headless) Chrome uses an OVERLAY scrollbar — it does not consume
+    // width, so the compensation is NOT TRIGGERED. The trap is specific to environments
+    // with classic scrollbars (headed Chrome). So what is asserted here is not that the
+    // compensation WAS APPLIED but that the RESULT is correct under both regimes; the
+    // compensation branch itself runs deterministically in the fake-Page test above.
     await oturum.page.goto(url('uzun.html'));
     const v = await viewportAyarla(oturum.page, 1440);
     assert.equal(v.dogrulandi, true, JSON.stringify(v));
@@ -213,7 +214,7 @@ if (!pwVar) {
   });
 
   test('TARAYICI: dikey taşma YOKSA telafi uygulanmaz', async () => {
-    // Her sayfaya 15px eklemek ters hata olurdu: taşmayan sayfa 1455'te ölçülürdü.
+    // Adding 15px to every page would be the opposite error: a page that does not overflow would be measured at 1455.
     await oturum.page.goto(url('bilinen.html'));
     const v = await viewportAyarla(oturum.page, 1440);
     assert.equal(v.dogrulandi, true, JSON.stringify(v));
