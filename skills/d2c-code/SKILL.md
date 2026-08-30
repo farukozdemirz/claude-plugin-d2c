@@ -197,10 +197,51 @@ holds for one family but is **1.375 for another** — assuming it shifted the he
 on two separate screens and cost a visual diff round each time. This one call buys that
 round back.
 
-Then write the code following the rules in `references/tailwind.md`. Place the component
-into the project's existing structure (App Router; create `componentsDir` if it does not
-exist). To make it verifiable you also need a page route that renders the component — if
-there is none, create `<previewDir>/<name>-preview/page.tsx`.
+Then write the code following the rules in `references/tailwind.md`.
+
+#### Where the files go — follow the project, do not dump
+
+`d2c inventory` (§3a) starts its output with a **Mevcut düzen** block. It is measured, not
+guessed: which groups exist, how deep the tree is, how many files sit loose at the root,
+whether there is a barrel, and the dominant naming style. Read it before creating a file.
+
+| What the inventory says | What you do |
+|---|---|
+| `grup: ui, product, layout` | **Follow it.** Put the new component in the matching group; do not open a new directory next to them. |
+| `adlandırma: kebab-case` | Follow it, even if you would have written PascalCase. |
+| `barrel var` | Add the export to the existing `index.ts`. |
+| `⚠ DÜZ YIĞIN` | There is no convention to follow → **group** (below). |
+
+**If the project defines a rule, that rule wins.** Check `CLAUDE.md`, the README, or an
+`eslint` import/order config before deciding — a written convention beats anything you
+infer from the file tree.
+
+**When there is no convention, group — do not pile everything into one directory.**
+The observed failure: ten components landed flat in `components/proshop/` — carousels,
+cards, icons, a hook and a header all side by side. Group by responsibility:
+
+```
+components/proshop/
+  layout/     ProShopHeader.tsx
+  carousel/   HeroCarousel.tsx · CategoryCarousel.tsx · ProductCarousel.tsx
+  product/    ProductCard.tsx · ProductMeta.tsx · TopRateProducts.tsx
+  ui/         StarRating.tsx · icons.tsx
+  hooks/      useCarousel.ts
+```
+
+Two rules that matter more than the exact grouping:
+
+- **A hook is not a component.** `useCarousel.ts` does not belong next to `ProductCard.tsx`.
+- **Shared before feature-specific.** Something used by more than one section (`StarRating`,
+  `icons`) belongs one level up, not inside a single section's folder.
+
+Do not restructure directories that already exist just because you would have done it
+differently — say it in the report and leave the decision to the user.
+
+To make the component verifiable you also need a page route that renders it — if there is
+none, create `<previewDir>/<name>-preview/page.tsx`. **That route is scaffolding for
+verification, not the deliverable**; when `/d2c` was run with `all`, the sections are
+composed into a single page afterwards (`/d2c` SKILL.md §3d).
 
 Give the elements to be measured a **stable `data-testid`** — English, kebab-case:
 `data-testid="review-card"`. (Even when the design is in another language, identifiers are

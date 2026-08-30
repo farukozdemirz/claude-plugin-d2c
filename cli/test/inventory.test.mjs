@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { envanterCikar, envanterYaz } from '../dist/lib.mjs';
+import { envanterCikar, envanterYaz, duzenCikar } from '../dist/lib.mjs';
 
 const KOK = fileURLToPath(new URL('./fixtures/project/components/', import.meta.url));
 const PY = fileURLToPath(new URL('../../skills/d2c-code/scripts/component-inventory.py', import.meta.url));
@@ -117,3 +117,45 @@ test('KABUL ÖLÇÜTÜ: regex script\'in kaçırdıklarını yakalıyor', () => 
 function adlarHepsi() {
   return env.dosyalar.flatMap((d) => d.exportlar.map((e) => e.ad));
 }
+
+// ── project convention detection ─────────────────────────────────────────────
+// The reported failure: ten components dumped flat into one directory. The rule is
+// "follow the project's convention; if there is none, group" — so the convention has to
+// be a counted fact, not a judgement call.
+test('flat dump is detected as "no convention"', () => {
+  const d = duzenCikar([
+    'HeroCarousel.tsx', 'ProductCard.tsx', 'ProductCarousel.tsx', 'StarRating.tsx',
+    'icons.tsx', 'useCarousel.ts',
+  ]);
+  assert.equal(d.duz, true);
+  assert.deepEqual(d.gruplar, []);
+  assert.equal(d.derinlik, 0);
+  assert.equal(d.kokteDosya, 6);
+});
+
+test('an existing grouping is NOT reported as flat', () => {
+  const d = duzenCikar([
+    'carousel/HeroCarousel.tsx', 'carousel/ProductCarousel.tsx',
+    'product/ProductCard.tsx', 'ui/StarRating.tsx', 'index.ts',
+  ]);
+  assert.equal(d.duz, false);
+  assert.deepEqual(d.gruplar, ['carousel', 'product', 'ui']);
+  assert.equal(d.derinlik, 1);
+  assert.equal(d.barrel, true);
+});
+
+test('a couple of loose files is not enough to call it a flat dump', () => {
+  // Two files at the root is a young project, not a convention to warn about.
+  assert.equal(duzenCikar(['Button.tsx', 'Input.tsx']).duz, false);
+});
+
+test('naming style is derived, mixed is reported as mixed', () => {
+  assert.equal(duzenCikar(['ProductCard.tsx', 'StarRating.tsx', 'HeroCarousel.tsx']).adlandirma, 'PascalCase');
+  assert.equal(duzenCikar(['product-card.tsx', 'star-rating.tsx', 'hero-carousel.tsx']).adlandirma, 'kebab-case');
+  assert.equal(duzenCikar(['ProductCard.tsx', 'star-rating.tsx', 'useThing.ts']).adlandirma, 'karisik');
+});
+
+test('the convention is part of the inventory output', () => {
+  assert.ok(env.duzen, 'envanterde duzen alanı olmalı');
+  assert.match(envanterYaz(env), /Mevcut düzen/);
+});

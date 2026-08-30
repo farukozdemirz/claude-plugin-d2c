@@ -75,6 +75,25 @@ skipped silently — `d2c xd assets` reports them in `atlananlar[]` with a reaso
 - **Freely laid out artboards.** Segmentation is for vertically flowing pages. On
   dashboards, maps and canvas-style screens it does not produce a meaningful section map.
 
+## Consequences of how it works — the composition and placement gaps
+
+- ~~**`all` produced preview routes but never composed the page.**~~ **✅ SOLVED (1.14.1)**
+  — `/d2c <link> all` ran every section and left five `*-preview` routes behind, with no
+  page rendering the screen. The preview route is `d2c-code`'s verification scaffolding,
+  and nothing turned the finished sections into a deliverable. `/d2c` SKILL.md §3d now
+  requires composing them, in the section map's order, and verifying the composed route —
+  sections that are each clean can still collide once stacked, and that is the only place
+  it shows up.
+
+- ~~**Components were dumped flat into one directory.**~~ **✅ SOLVED (1.14.1)** — ten
+  components (carousels, cards, icons, a hook, a header) landed side by side in
+  `components/proshop/`. The rule said "place it into the project's existing structure",
+  which is not something you can act on. `d2c inventory` now **measures** the convention —
+  groups, depth, loose files at the root, barrel, naming style — and flags a flat pile
+  explicitly. A written rule in `CLAUDE.md` wins over anything inferred; with no
+  convention, components are grouped by responsibility and a hook is not filed as a
+  component.
+
 ## What it does not produce
 
 - **No tests.** Nothing tells you if the component breaks later. `/d2c-verify` is run by

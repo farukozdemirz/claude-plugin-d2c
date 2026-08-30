@@ -41,8 +41,31 @@ export interface DosyaKaydi {
   hata?: string;
 }
 
+/**
+ * The project's existing component convention.
+ *
+ * Why this is measured rather than guessed: the rule is "follow the project's convention;
+ * if there is none, group". Deciding that by eye means Claude guesses, and the observed
+ * outcome was ten components dumped flat into one directory. These are countable facts.
+ */
+export interface Duzen {
+  /** Directories directly under the root that contain components. */
+  gruplar: string[];
+  /** Deepest nesting level below the root (0 = everything is flat). */
+  derinlik: number;
+  /** Files sitting directly at the root, in no group. */
+  kokteDosya: number;
+  /** Is there an `index.ts`/`index.tsx` barrel? */
+  barrel: boolean;
+  /** Dominant file naming style. */
+  adlandirma: 'PascalCase' | 'kebab-case' | 'camelCase' | 'karisik' | 'bilinmiyor';
+  /** true when there is no convention to follow — everything is flat at the root. */
+  duz: boolean;
+}
+
 export interface Envanter {
   kok: string;
+  duzen: Duzen;
   dosyalar: DosyaKaydi[];
   /** A hex embedded in 3+ files — a theme token candidate. */
   tokenAdaylari: Array<{ renk: string; dosyalar: string[] }>;
@@ -190,9 +213,44 @@ export function dosyayiTara(yol: string, kok: string): DosyaKaydi {
   return kayit;
 }
 
+/** Derives the convention from the file list — counted, not guessed. */
+export function duzenCikar(yollar: string[]): Duzen {
+  const parcali = yollar.map((y) => y.replace(/\\/g, '/').split('/'));
+  const gruplar = [...new Set(parcali.filter((p) => p.length > 1).map((p) => p[0]!))].sort();
+  const derinlik = parcali.reduce((m, p) => Math.max(m, p.length - 1), 0);
+  const kokteDosya = parcali.filter((p) => p.length === 1).length;
+  const barrel = yollar.some((y) => /(^|[\\/])index\.tsx?$/.test(y));
+
+  const adlar = parcali.map((p) => p[p.length - 1]!.replace(/\.[jt]sx?$/, ''))
+    .filter((a) => a !== 'index');
+  const say = { PascalCase: 0, 'kebab-case': 0, camelCase: 0 } as Record<string, number>;
+  for (const a of adlar) {
+    if (/^[A-Z][A-Za-z0-9]*$/.test(a)) say.PascalCase!++;
+    else if (/^[a-z0-9]+(-[a-z0-9]+)+$/.test(a)) say['kebab-case']!++;
+    else if (/^[a-z][A-Za-z0-9]*$/.test(a)) say.camelCase!++;
+  }
+  const sirali = Object.entries(say).sort((a, b) => b[1] - a[1]);
+  const toplam = adlar.length;
+  const adlandirma = !toplam ? 'bilinmiyor'
+    : sirali[0]![1] / toplam >= 0.7 ? (sirali[0]![0] as Duzen['adlandirma'])
+    : 'karisik';
+
+  return {
+    gruplar, derinlik, kokteDosya, barrel, adlandirma,
+    // No convention to follow: nothing is grouped and there are enough files that the
+    // flatness is a choice rather than a coincidence.
+    duz: gruplar.length === 0 && kokteDosya >= 4,
+  };
+}
+
+const BOS_DUZEN: Duzen = {
+  gruplar: [], derinlik: 0, kokteDosya: 0, barrel: false,
+  adlandirma: 'bilinmiyor', duz: false,
+};
+
 export function envanterCikar(kok: string): Envanter {
   if (!existsSync(kok)) {
-    return { kok, dosyalar: [], tokenAdaylari: [], hatalar: [] };
+    return { kok, duzen: BOS_DUZEN, dosyalar: [], tokenAdaylari: [], hatalar: [] };
   }
   const dosyalar = dosyalariBul(kok).map((y) => dosyayiTara(y, kok));
   const hexHarita = new Map<string, string[]>();
@@ -209,6 +267,7 @@ export function envanterCikar(kok: string): Envanter {
 
   return {
     kok,
+    duzen: duzenCikar(dosyalar.map((d) => d.yol)),
     dosyalar,
     tokenAdaylari,
     hatalar: dosyalar.filter((d) => d.hata).map((d) => ({ yol: d.yol, hata: d.hata! })),
@@ -219,6 +278,15 @@ export function envanterCikar(kok: string): Envanter {
 export function envanterYaz(env: Envanter): string {
   const s: string[] = [];
   if (!env.dosyalar.length) return `(bileşen yok: ${env.kok})\n`;
+  const d = env.duzen;
+  s.push('## Mevcut düzen');
+  s.push(`   grup   : ${d.gruplar.length ? d.gruplar.join(', ') : '— (gruplama yok)'}`);
+  s.push(`   derinlik: ${d.derinlik} · kökte ${d.kokteDosya} dosya · barrel ${d.barrel ? 'var' : 'yok'}`);
+  s.push(`   adlandırma: ${d.adlandirma}`);
+  s.push(d.duz
+    ? '   ⚠ DÜZ YIĞIN — uyulacak bir düzen yok; yeni bileşenleri GRUPLA (bkz. SKILL.md §3b)'
+    : '   → mevcut düzene UY; yeni dizin açmadan önce buraya bak');
+  s.push('');
   for (const d of env.dosyalar) {
     s.push(`## ${d.yol}`);
     const ex = d.exportlar.map((e) => {

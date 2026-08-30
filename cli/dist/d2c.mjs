@@ -23313,9 +23313,44 @@ function dosyayiTara(yol, kok) {
   }
   return kayit;
 }
+function duzenCikar(yollar) {
+  const parcali = yollar.map((y) => y.replace(/\\/g, "/").split("/"));
+  const gruplar = [...new Set(parcali.filter((p) => p.length > 1).map((p) => p[0]))].sort();
+  const derinlik2 = parcali.reduce((m, p) => Math.max(m, p.length - 1), 0);
+  const kokteDosya = parcali.filter((p) => p.length === 1).length;
+  const barrel = yollar.some((y) => /(^|[\\/])index\.tsx?$/.test(y));
+  const adlar = parcali.map((p) => p[p.length - 1].replace(/\.[jt]sx?$/, "")).filter((a) => a !== "index");
+  const say = { PascalCase: 0, "kebab-case": 0, camelCase: 0 };
+  for (const a of adlar) {
+    if (/^[A-Z][A-Za-z0-9]*$/.test(a)) say.PascalCase++;
+    else if (/^[a-z0-9]+(-[a-z0-9]+)+$/.test(a)) say["kebab-case"]++;
+    else if (/^[a-z][A-Za-z0-9]*$/.test(a)) say.camelCase++;
+  }
+  const sirali = Object.entries(say).sort((a, b) => b[1] - a[1]);
+  const toplam = adlar.length;
+  const adlandirma = !toplam ? "bilinmiyor" : sirali[0][1] / toplam >= 0.7 ? sirali[0][0] : "karisik";
+  return {
+    gruplar,
+    derinlik: derinlik2,
+    kokteDosya,
+    barrel,
+    adlandirma,
+    // No convention to follow: nothing is grouped and there are enough files that the
+    // flatness is a choice rather than a coincidence.
+    duz: gruplar.length === 0 && kokteDosya >= 4
+  };
+}
+var BOS_DUZEN = {
+  gruplar: [],
+  derinlik: 0,
+  kokteDosya: 0,
+  barrel: false,
+  adlandirma: "bilinmiyor",
+  duz: false
+};
 function envanterCikar(kok) {
   if (!existsSync2(kok)) {
-    return { kok, dosyalar: [], tokenAdaylari: [], hatalar: [] };
+    return { kok, duzen: BOS_DUZEN, dosyalar: [], tokenAdaylari: [], hatalar: [] };
   }
   const dosyalar = dosyalariBul(kok).map((y) => dosyayiTara(y, kok));
   const hexHarita = /* @__PURE__ */ new Map();
@@ -23328,6 +23363,7 @@ function envanterCikar(kok) {
   const tokenAdaylari = [...hexHarita.entries()].filter(([, v]) => v.length >= 3).map(([renk, dosyalar2]) => ({ renk, dosyalar: benzersiz(dosyalar2) })).sort((a, b) => b.dosyalar.length - a.dosyalar.length || a.renk.localeCompare(b.renk));
   return {
     kok,
+    duzen: duzenCikar(dosyalar.map((d) => d.yol)),
     dosyalar,
     tokenAdaylari,
     hatalar: dosyalar.filter((d) => d.hata).map((d) => ({ yol: d.yol, hata: d.hata }))
@@ -23337,21 +23373,28 @@ function envanterYaz(env) {
   const s = [];
   if (!env.dosyalar.length) return `(bile\u015Fen yok: ${env.kok})
 `;
-  for (const d of env.dosyalar) {
-    s.push(`## ${d.yol}`);
-    const ex = d.exportlar.map((e) => {
+  const d = env.duzen;
+  s.push("## Mevcut d\xFCzen");
+  s.push(`   grup   : ${d.gruplar.length ? d.gruplar.join(", ") : "\u2014 (gruplama yok)"}`);
+  s.push(`   derinlik: ${d.derinlik} \xB7 k\xF6kte ${d.kokteDosya} dosya \xB7 barrel ${d.barrel ? "var" : "yok"}`);
+  s.push(`   adland\u0131rma: ${d.adlandirma}`);
+  s.push(d.duz ? "   \u26A0 D\xDCZ YI\u011EIN \u2014 uyulacak bir d\xFCzen yok; yeni bile\u015Fenleri GRUPLA (bkz. SKILL.md \xA73b)" : "   \u2192 mevcut d\xFCzene UY; yeni dizin a\xE7madan \xF6nce buraya bak");
+  s.push("");
+  for (const d2 of env.dosyalar) {
+    s.push(`## ${d2.yol}`);
+    const ex = d2.exportlar.map((e) => {
       const on = e.varsayilan ? "default " : "";
       const arka = e.kaynak ? ` \u2190 ${e.kaynak}` : "";
       const tip = e.sadeceTip ? " (tip)" : "";
       return `${on}${e.ad}${tip}${arka}`;
     });
     s.push(`   export : ${ex.length ? ex.join(", ") : "-"}`);
-    if (d.jsdoc) s.push(`   kaynak : ${d.jsdoc.slice(0, 300)}`);
-    s.push(`   testid : ${d.testidler.length ? d.testidler.join(", ") : "-"}`);
-    if (d.olculer.length) s.push(`   \xF6l\xE7\xFC   : ${d.olculer.join(" ")}`);
-    if (d.radiuslar.length) s.push(`   radius : ${d.radiuslar.join(" ")}`);
-    if (d.renkler.length) s.push(`   renk   : ${d.renkler.join(" ")}`);
-    if (d.hata) s.push(`   \u26A0 PARSE ED\u0130LEMED\u0130: ${d.hata}`);
+    if (d2.jsdoc) s.push(`   kaynak : ${d2.jsdoc.slice(0, 300)}`);
+    s.push(`   testid : ${d2.testidler.length ? d2.testidler.join(", ") : "-"}`);
+    if (d2.olculer.length) s.push(`   \xF6l\xE7\xFC   : ${d2.olculer.join(" ")}`);
+    if (d2.radiuslar.length) s.push(`   radius : ${d2.radiuslar.join(" ")}`);
+    if (d2.renkler.length) s.push(`   renk   : ${d2.renkler.join(" ")}`);
+    if (d2.hata) s.push(`   \u26A0 PARSE ED\u0130LEMED\u0130: ${d2.hata}`);
     s.push("");
   }
   if (env.tokenAdaylari.length) {

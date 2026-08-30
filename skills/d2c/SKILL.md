@@ -164,6 +164,53 @@ Then invoke the `d2c-code` skill (via the Skill tool) and give it the **path to
 **Do not stop between sections**; if one fails, record it and move to the next, then
 report everything together at the end.
 
+## 3d. Compose the page — REQUIRED when the answer was `all`
+
+**The per-section preview routes are verification scaffolding, not the deliverable.**
+`/d2c-code` creates `<previewDir>/<slug>-preview/page.tsx` so a section can be rendered
+and measured on its own. Leaving only those behind means the user asked for a screen and
+received five disconnected preview URLs.
+
+Observed failure: `/d2c <link> all` produced `proshop-header-preview`,
+`proshop-hero-preview`, `proshop-categories-preview`, `proshop-products-preview` and
+`proshop-toprate-preview` — and no page that renders the screen.
+
+When every section is done:
+
+1. **Compose one route** that renders the sections **in the section map's order** (by `y`,
+   which is the order they appear on the screen):
+
+   ```tsx
+   export default function Page() {
+     return (
+       <>
+         <ProShopHeader />
+         <HeroCarousel />
+         <CategoryCarousel />
+         <ProductCarousel />
+         <TopRateProducts />
+       </>
+     );
+   }
+   ```
+
+2. **Which route?** In order: an existing route matching the screen (`app/page.tsx` for a
+   Home screen) → `<previewDir>/<screen-slug>/page.tsx`. If neither is obvious, **ask** —
+   overwriting someone's `app/page.tsx` is not a call you make silently.
+
+3. **Verify the composed page**, not only the individual sections. Sections that were each
+   clean can still collide once stacked: `render robust` on the composed route catches
+   exactly that, and it is the only place it can be caught.
+
+4. **The preview routes have done their job.** Say so and offer to remove them:
+
+   > The sections are composed at `<route>`. The five `*-preview` routes were verification
+   > scaffolding — shall I remove them, or keep them for later re-verification?
+
+   Do not delete them on your own initiative; they are what `/d2c-verify` re-uses.
+
+With a single section this step does not apply — the preview route is the deliverable.
+
 ## 3b. Speed budget — count tool calls
 
 In this pipeline **time ≈ number of tool calls × ~15 s**. The bottleneck is not the

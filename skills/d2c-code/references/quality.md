@@ -101,7 +101,11 @@ comments for decoration; mark only what is genuinely missing.
 - Do not leave unused props, imports or `data-testid`s.
 - `data-testid` exists only for verification; never bind behaviour to it in product code.
 - If the same icon is duplicated in two components, extract it into a shared file.
-- File and directory naming must follow the project's existing convention.
+- File and directory naming must follow the project's existing convention — read the
+  **Mevcut düzen** block that `d2c inventory` prints, and any rule written in `CLAUDE.md`.
+  When there is no convention, group by responsibility (layout / carousel / product / ui /
+  hooks); do not pile every component into one directory. A hook is not a component, and
+  anything shared by more than one section belongs one level up.
 - **Every identifier in the code is in ENGLISH.** File name, component name, prop,
   variable, `data-testid`, CSS token name — all of them. Even when the design is in
   another language, the code is written in English: `ProductCard.tsx` / `<ProductCard>` /
