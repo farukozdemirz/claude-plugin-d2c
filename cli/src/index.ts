@@ -28,6 +28,7 @@ export * from './visual/diff.js';
 export * from './visual/engine.js';
 export * from './visual/pixel.js';
 export * from './inventory/scan.js';
+export * from './inventory/packages.js';
 export * from './source/adobe-xd/smoke.js';
 export * from './util/trace.js';
 export * from './verify/robust.js';

@@ -9,7 +9,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { envanterCikar, envanterYaz, duzenCikar } from '../dist/lib.mjs';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { envanterCikar, envanterYaz, duzenCikar, paketleriBul, paketleriYaz } from '../dist/lib.mjs';
 
 const KOK = fileURLToPath(new URL('./fixtures/project/components/', import.meta.url));
 const PY = fileURLToPath(new URL('../../skills/d2c-code/scripts/component-inventory.py', import.meta.url));
@@ -158,4 +161,59 @@ test('naming style is derived, mixed is reported as mixed', () => {
 test('the convention is part of the inventory output', () => {
   assert.ok(env.duzen, 'envanterde duzen alanı olmalı');
   assert.match(envanterYaz(env), /Mevcut düzen/);
+});
+
+// ── installed UI packages ────────────────────────────────────────────────────
+// The reported failure: with no package installed and no question asked, a carousel
+// engine was hand-written. Step one of the rule has to be a measured fact.
+test('an installed carousel package is detected', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'd2c-pkg-'));
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({
+    dependencies: { next: '15', 'embla-carousel-react': '^8' },
+    devDependencies: { '@radix-ui/react-tabs': '^1' },
+  }));
+  const p = paketleriBul(dir);
+  assert.deepEqual(p.carousel, ['embla-carousel-react']);
+  assert.deepEqual(p.uiKit, ['@radix-ui/react-tabs']);
+  assert.match(paketleriYaz(p), /MEVCUT paketi kullan/);
+});
+
+test('NO carousel package → the output says "do not write your own"', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'd2c-pkg-'));
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ dependencies: { next: '15' } }));
+  const p = paketleriBul(dir);
+  assert.deepEqual(p.carousel, []);
+  const y = paketleriYaz(p);
+  assert.match(y, /YOK/);
+  assert.match(y, /kendi motorunu YAZMA/);
+});
+
+test('package.json is found by walking UP from the component directory', () => {
+  const kok = mkdtempSync(join(tmpdir(), 'd2c-pkg-'));
+  writeFileSync(join(kok, 'package.json'), JSON.stringify({ dependencies: { swiper: '^11' } }));
+  const derin = join(kok, 'src', 'components', 'proshop');
+  mkdirSync(derin, { recursive: true });
+  assert.deepEqual(paketleriBul(derin).carousel, ['swiper']);
+});
+
+test('no package.json → says so, does NOT claim "there is no package"', () => {
+  // Claiming absence would send the caller straight to "ask", which is the safe
+  // direction — but the output must not pretend it measured something it did not.
+  const dir = mkdtempSync(join(tmpdir(), 'd2c-nopkg-'));
+  const p = paketleriBul(dir);
+  assert.equal(p.paketJson, null);
+  assert.match(paketleriYaz(p), /bulunamadı/);
+});
+
+test('a broken package.json does not crash and does not claim a package exists', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'd2c-pkg-'));
+  writeFileSync(join(dir, 'package.json'), '{ bozuk json');
+  const p = paketleriBul(dir);
+  assert.deepEqual(p.carousel, []);
+  assert.ok(p.paketJson, 'dosya bulundu olarak işaretlenmeli');
+});
+
+test('the package block is part of the inventory output', () => {
+  assert.ok(env.paketler, 'envanterde paketler alanı olmalı');
+  assert.match(envanterYaz(env), /Kurulu UI paketleri/);
 });

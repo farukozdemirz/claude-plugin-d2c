@@ -94,6 +94,18 @@ skipped silently — `d2c xd assets` reports them in `atlananlar[]` with a reaso
   convention, components are grouped by responsibility and a hook is not filed as a
   component.
 
+- ~~**It hand-wrote a carousel engine instead of asking.**~~ **✅ SOLVED (1.14.2)** — with
+  no package installed and no question asked, a `useCarousel.ts` appeared carrying a
+  scroll listener, an `active` index, an `activeRef` mirror and a `ResizeObserver`
+  re-anchoring `scrollLeft`. The cause was a rule of ours: §3a4 used to end with *"a simple
+  case may not need a library — suggest `overflow-x-auto` + `scroll-snap`"*, and that read
+  as permission to improvise. Two changes: `d2c inventory` now reports the installed
+  carousel/UI packages from `package.json` (measured, so step one is not a guess), and
+  §3a4 forbids writing an engine outright — hook, scroll listener, index state,
+  `ResizeObserver` and snap arithmetic are all named. The only thing allowed without a
+  package is a **zero-JS** scrollable strip, and only when the design has no arrows and no
+  dots. Otherwise: use the project's package, or ask and leave the markup static.
+
 ## What it does not produce
 
 - **No tests.** Nothing tells you if the component breaks later. `/d2c-verify` is run by

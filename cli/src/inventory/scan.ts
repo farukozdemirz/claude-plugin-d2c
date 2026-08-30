@@ -17,6 +17,7 @@
 import { parse } from '@babel/parser';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, relative, extname } from 'node:path';
+import { paketleriBul, paketleriYaz, type PaketBulgusu } from './packages.js';
 
 export interface ExportKaydi {
   ad: string;
@@ -66,6 +67,8 @@ export interface Duzen {
 export interface Envanter {
   kok: string;
   duzen: Duzen;
+  /** Installed UI packages — read before writing any interactive component. */
+  paketler: PaketBulgusu;
   dosyalar: DosyaKaydi[];
   /** A hex embedded in 3+ files — a theme token candidate. */
   tokenAdaylari: Array<{ renk: string; dosyalar: string[] }>;
@@ -250,7 +253,7 @@ const BOS_DUZEN: Duzen = {
 
 export function envanterCikar(kok: string): Envanter {
   if (!existsSync(kok)) {
-    return { kok, duzen: BOS_DUZEN, dosyalar: [], tokenAdaylari: [], hatalar: [] };
+    return { kok, duzen: BOS_DUZEN, paketler: paketleriBul(kok), dosyalar: [], tokenAdaylari: [], hatalar: [] };
   }
   const dosyalar = dosyalariBul(kok).map((y) => dosyayiTara(y, kok));
   const hexHarita = new Map<string, string[]>();
@@ -268,6 +271,7 @@ export function envanterCikar(kok: string): Envanter {
   return {
     kok,
     duzen: duzenCikar(dosyalar.map((d) => d.yol)),
+    paketler: paketleriBul(kok),
     dosyalar,
     tokenAdaylari,
     hatalar: dosyalar.filter((d) => d.hata).map((d) => ({ yol: d.yol, hata: d.hata! })),
@@ -279,6 +283,8 @@ export function envanterYaz(env: Envanter): string {
   const s: string[] = [];
   if (!env.dosyalar.length) return `(bileşen yok: ${env.kok})\n`;
   const d = env.duzen;
+  s.push(paketleriYaz(env.paketler).trimEnd());
+  s.push('');
   s.push('## Mevcut düzen');
   s.push(`   grup   : ${d.gruplar.length ? d.gruplar.join(', ') : '— (gruplama yok)'}`);
   s.push(`   derinlik: ${d.derinlik} · kökte ${d.kokteDosya} dosya · barrel ${d.barrel ? 'var' : 'yok'}`);

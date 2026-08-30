@@ -2130,8 +2130,8 @@ var require_png = __commonJS({
 });
 
 // src/bin.ts
-import { writeFileSync as writeFileSync5, mkdirSync as mkdirSync5, readFileSync as readFileSync6, existsSync as existsSync3 } from "node:fs";
-import { dirname as dirname2, join as join6 } from "node:path";
+import { writeFileSync as writeFileSync5, mkdirSync as mkdirSync5, readFileSync as readFileSync7, existsSync as existsSync4 } from "node:fs";
+import { dirname as dirname3, join as join7 } from "node:path";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -23179,8 +23179,83 @@ function getParserClass(pluginsMap) {
 }
 
 // src/inventory/scan.ts
-import { readFileSync as readFileSync5, readdirSync, statSync, existsSync as existsSync2 } from "node:fs";
-import { join as join4, relative, extname } from "node:path";
+import { readFileSync as readFileSync6, readdirSync, statSync, existsSync as existsSync3 } from "node:fs";
+import { join as join5, relative, extname } from "node:path";
+
+// src/inventory/packages.ts
+import { readFileSync as readFileSync5, existsSync as existsSync2 } from "node:fs";
+import { dirname as dirname2, join as join4, resolve } from "node:path";
+var CAROUSEL_PAKETLERI = [
+  "swiper",
+  "embla-carousel",
+  "embla-carousel-react",
+  "embla-carousel-autoplay",
+  "keen-slider",
+  "@splidejs/react-splide",
+  "@splidejs/splide",
+  "react-slick",
+  "slick-carousel",
+  "react-responsive-carousel",
+  "react-multi-carousel",
+  "flickity",
+  "glidejs",
+  "@glidejs/glide"
+];
+var UI_KIT_PAKETLERI = [
+  "@radix-ui/react-tabs",
+  "@radix-ui/react-accordion",
+  "@radix-ui/react-dialog",
+  "@radix-ui/react-dropdown-menu",
+  "@radix-ui/react-navigation-menu",
+  "@headlessui/react",
+  "@mantine/carousel",
+  "@nextui-org/react",
+  "@chakra-ui/react"
+];
+var ANIMASYON_PAKETLERI = ["framer-motion", "motion", "@react-spring/web"];
+function paketJsonBul(baslangic, tavan = 6) {
+  let d = resolve(baslangic);
+  for (let i = 0; i < tavan; i++) {
+    const p = join4(d, "package.json");
+    if (existsSync2(p)) return p;
+    const ust = dirname2(d);
+    if (ust === d) break;
+    d = ust;
+  }
+  return null;
+}
+function paketleriBul(baslangic) {
+  const paketJson = paketJsonBul(baslangic);
+  if (!paketJson) return { paketJson: null, carousel: [], uiKit: [], animasyon: [] };
+  let bagimliliklar = {};
+  try {
+    const j = JSON.parse(readFileSync5(paketJson, "utf8"));
+    bagimliliklar = { ...j.dependencies ?? {}, ...j.devDependencies ?? {} };
+  } catch {
+    return { paketJson, carousel: [], uiKit: [], animasyon: [] };
+  }
+  const var_ = (liste) => liste.filter((p) => p in bagimliliklar);
+  return {
+    paketJson,
+    carousel: var_(CAROUSEL_PAKETLERI),
+    uiKit: var_(UI_KIT_PAKETLERI),
+    animasyon: var_(ANIMASYON_PAKETLERI)
+  };
+}
+function paketleriYaz(p) {
+  const s = ["## Kurulu UI paketleri"];
+  if (!p.paketJson) {
+    s.push("   package.json bulunamad\u0131 \u2014 paket tespiti YAPILAMADI, varsayma");
+    return s.join("\n") + "\n";
+  }
+  s.push(`   carousel : ${p.carousel.length ? p.carousel.join(", ") : "\u2014 YOK"}`);
+  if (p.uiKit.length) s.push(`   ui kit   : ${p.uiKit.join(", ")}`);
+  if (p.animasyon.length) s.push(`   animasyon: ${p.animasyon.join(", ")}`);
+  s.push(p.carousel.length ? "   \u2192 Carousel gerekiyorsa MEVCUT paketi kullan; yenisini kurma." : "   \u26A0 Carousel paketi YOK \u2014 kendi motorunu YAZMA. Kullan\u0131c\u0131ya sor (SKILL.md \xA73a4).");
+  return s.join("\n") + "\n";
+}
+
+// src/inventory/scan.ts
 var UZANTILAR = /* @__PURE__ */ new Set([".tsx", ".ts", ".jsx"]);
 var ATLA = /* @__PURE__ */ new Set(["node_modules", ".next", "dist", "build", ".git", "coverage"]);
 function dosyalariBul(kok) {
@@ -23194,7 +23269,7 @@ function dosyalariBul(kok) {
     }
     for (const g of girisler.sort()) {
       if (ATLA.has(g)) continue;
-      const tam = join4(d, g);
+      const tam = join5(d, g);
       let st;
       try {
         st = statSync(tam);
@@ -23290,7 +23365,7 @@ var RE_RADIUS = /\brounded(?:-[a-z]+)?(?:-\[[^\]]+\])?/g;
 var RE_HEX = /#[0-9A-Fa-f]{6}\b/g;
 var benzersiz = (a) => [...new Set(a)].sort();
 function dosyayiTara(yol, kok) {
-  const src = readFileSync5(yol, "utf8");
+  const src = readFileSync6(yol, "utf8");
   const kayit = {
     yol: relative(kok, yol) || yol,
     exportlar: [],
@@ -23349,8 +23424,8 @@ var BOS_DUZEN = {
   duz: false
 };
 function envanterCikar(kok) {
-  if (!existsSync2(kok)) {
-    return { kok, duzen: BOS_DUZEN, dosyalar: [], tokenAdaylari: [], hatalar: [] };
+  if (!existsSync3(kok)) {
+    return { kok, duzen: BOS_DUZEN, paketler: paketleriBul(kok), dosyalar: [], tokenAdaylari: [], hatalar: [] };
   }
   const dosyalar = dosyalariBul(kok).map((y) => dosyayiTara(y, kok));
   const hexHarita = /* @__PURE__ */ new Map();
@@ -23364,6 +23439,7 @@ function envanterCikar(kok) {
   return {
     kok,
     duzen: duzenCikar(dosyalar.map((d) => d.yol)),
+    paketler: paketleriBul(kok),
     dosyalar,
     tokenAdaylari,
     hatalar: dosyalar.filter((d) => d.hata).map((d) => ({ yol: d.yol, hata: d.hata }))
@@ -23374,6 +23450,8 @@ function envanterYaz(env) {
   if (!env.dosyalar.length) return `(bile\u015Fen yok: ${env.kok})
 `;
   const d = env.duzen;
+  s.push(paketleriYaz(env.paketler).trimEnd());
+  s.push("");
   s.push("## Mevcut d\xFCzen");
   s.push(`   grup   : ${d.gruplar.length ? d.gruplar.join(", ") : "\u2014 (gruplama yok)"}`);
   s.push(`   derinlik: ${d.derinlik} \xB7 k\xF6kte ${d.kokteDosya} dosya \xB7 barrel ${d.barrel ? "var" : "yok"}`);
@@ -23665,7 +23743,7 @@ async function robustDogrula(sec) {
 
 // src/source/adobe-xd/assets.ts
 import { mkdirSync as mkdirSync4, writeFileSync as writeFileSync4 } from "node:fs";
-import { join as join5 } from "node:path";
+import { join as join6 } from "node:path";
 function slug(s) {
   return s.toLocaleLowerCase("tr").replace(/ı/g, "i").replace(/ş/g, "s").replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ö/g, "o").replace(/ç/g, "c").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "varlik";
 }
@@ -23781,7 +23859,7 @@ async function gorselleriIndir(proto, uidler, hedefDizin) {
       continue;
     }
     const buf = Buffer.from(await r.arrayBuffer());
-    const dosya = join5(hedefDizin, `${uid.slice(0, 12)}${uzanti}`);
+    const dosya = join6(hedefDizin, `${uid.slice(0, 12)}${uzanti}`);
     writeFileSync4(dosya, buf);
     gorseller.push({ dosya, uid, boyutBayt: buf.length, tip });
   }
@@ -23818,7 +23896,7 @@ function svgleriYaz(elemanlar, hedefDizin) {
     const temel = slug(ad);
     const n = (kullanilanAd.get(temel) ?? 0) + 1;
     kullanilanAd.set(temel, n);
-    const dosya = join5(hedefDizin, `${temel}${n > 1 ? `-${n}` : ""}.svg`);
+    const dosya = join6(hedefDizin, `${temel}${n > 1 ? `-${n}` : ""}.svg`);
     writeFileSync4(dosya, uretim.svg);
     const kayit = { dosya, ad, kutu: uretim.kutu, yolAdedi: grup.length, kullanim: 1 };
     icerikIndeksi.set(uretim.svg, kayit);
@@ -23938,12 +24016,12 @@ function emit(args, data, human) {
   if (args.json) {
     const s = JSON.stringify(data, null, 2);
     if (args.output) {
-      mkdirSync5(dirname2(args.output), { recursive: true });
+      mkdirSync5(dirname3(args.output), { recursive: true });
       writeFileSync5(args.output, s + "\n");
       console.log(`yaz\u0131ld\u0131: ${args.output}`);
     } else console.log(s);
   } else if (args.output) {
-    mkdirSync5(dirname2(args.output), { recursive: true });
+    mkdirSync5(dirname3(args.output), { recursive: true });
     writeFileSync5(args.output, JSON.stringify(data, null, 2) + "\n");
     console.log(`yaz\u0131ld\u0131: ${args.output}`);
     human();
@@ -24022,7 +24100,7 @@ async function cmdSections(args) {
     console.error("HATA: --design gerekli\n\n" + HELP);
     return 2;
   }
-  const raw = readFileSync6(args.design, "utf8");
+  const raw = readFileSync7(args.design, "utf8");
   const design = DesignSchema.parse(JSON.parse(raw));
   const t02 = Date.now();
   const map = await olc("bolumleme", () => segment(design, {
@@ -24054,7 +24132,7 @@ async function cmdSpec(args) {
     console.error("HATA: --section veya --kutu gerekli\n\n" + HELP);
     return 2;
   }
-  const design = DesignSchema.parse(JSON.parse(readFileSync6(args.design, "utf8")));
+  const design = DesignSchema.parse(JSON.parse(readFileSync7(args.design, "utf8")));
   const harita = segment(design, { viewport: args.viewport, bosluk: args.bosluk, gutter: args.gutter });
   let kutu;
   let bolum = null;
@@ -24087,11 +24165,11 @@ Mevcut b\xF6l\xFCmler:`);
     return 2;
   }
   const dir = args.outDir ?? ".";
-  const olcumYol = join6(dir, "olcum.json");
+  const olcumYol = join7(dir, "olcum.json");
   let onceki = null;
-  if (!args.force && existsSync3(olcumYol)) {
+  if (!args.force && existsSync4(olcumYol)) {
     try {
-      onceki = OlcumSchema.parse(JSON.parse(readFileSync6(olcumYol, "utf8")));
+      onceki = OlcumSchema.parse(JSON.parse(readFileSync7(olcumYol, "utf8")));
     } catch {
       console.error(`UYARI: mevcut ${olcumYol} okunamad\u0131, testid'ler ta\u015F\u0131nmayacak`);
     }
@@ -24102,9 +24180,9 @@ Mevcut b\xF6l\xFCmler:`);
   if (args.outDir) {
     mkdirSync5(dir, { recursive: true });
     writeFileSync5(olcumYol, JSON.stringify(olcum, null, 2) + "\n");
-    writeFileSync5(join6(dir, "spec.md"), specMarkdown(olcum));
+    writeFileSync5(join7(dir, "spec.md"), specMarkdown(olcum));
     console.log(`yaz\u0131ld\u0131: ${olcumYol}`);
-    console.log(`yaz\u0131ld\u0131: ${join6(dir, "spec.md")}`);
+    console.log(`yaz\u0131ld\u0131: ${join7(dir, "spec.md")}`);
   }
   if (args.json && !args.outDir) {
     console.log(JSON.stringify(olcum, null, 2));
@@ -24267,7 +24345,7 @@ async function cmdRenderRobust(args) {
 ` + HELP);
     return 2;
   }
-  const olcum = OlcumSchema.parse(JSON.parse(readFileSync6(args.olcum, "utf8")));
+  const olcum = OlcumSchema.parse(JSON.parse(readFileSync7(args.olcum, "utf8")));
   const testidler = [...new Set(olcum.elemanlar.map((e) => e.testid).filter((t) => !!t))];
   if (!testidler.length) {
     console.error("HATA: olcum.json'da testid yok \u2014 kod faz\u0131 e\u015Flemeyi doldurmal\u0131 (d2c-code \xA73).");
@@ -24350,9 +24428,9 @@ async function cmdAssets(args) {
   }
   const agc = await fetchComponentJson(proto, cid, CONTENT_TYPES.agc);
   const { elemanlar } = flatten(agc);
-  const svgSonuc = svgleriYaz(elemanlar, join6(args.outDir, "icon"));
+  const svgSonuc = svgleriYaz(elemanlar, join7(args.outDir, "icon"));
   const uidler = elemanlar.filter((e) => e.tip === "gorsel").map((e) => e.uid).filter((u) => !!u);
-  const gorselSonuc = await gorselleriIndir(proto, uidler, join6(args.outDir, "image"));
+  const gorselSonuc = await gorselleriIndir(proto, uidler, join7(args.outDir, "image"));
   const sonuc = {
     svgler: svgSonuc.svgler,
     gorseller: gorselSonuc.gorseller,

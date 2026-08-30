@@ -168,25 +168,64 @@ originally generated as static markup; both are carousels.
 - The design shows only the **default state**. Hover, focus, open/closed and transitions
   are not in it — do not invent them, note them.
 
-### 3a4. A slider was detected — check the project first
+### 3a4. A slider was detected — you do NOT implement it yourself
 
-**Do not install a dependency on your own initiative.** In order:
+> **DO NOT WRITE A CAROUSEL ENGINE.** Not a `useCarousel` hook, not scroll listeners, not
+> index state, not a `ResizeObserver`, not snap-position arithmetic. This is not a rule of
+> taste — carousels are where keyboard access, focus management, RTL, resize, momentum
+> scrolling and touch all go wrong, and none of that is visible in a design.
 
-1. **Is there a carousel package in the project?** Look at `package.json` for
-   `swiper`, `embla-carousel-react`, `keen-slider`, `splide`, `react-slick`,
-   `@radix-ui/*`, or whatever is already there. **Use what is already installed.**
-2. **Is there a shared component?** `d2c inventory` (§3a) lists them — a `Carousel`,
-   `Slider` or `Swiper` component in the project is reused, not rewritten.
-3. **Neither exists?** Then **ask, do not install**:
+This happened: with no package installed and no question asked, a `useCarousel.ts` was
+written with a scroll listener, an `active` index, an `activeRef` mirror and a
+`ResizeObserver` re-anchoring `scrollLeft` — an engine, hand-rolled, in a project that was
+never asked.
 
-   > The design shows a slider/carousel (arrows + dots), but the project has no usable
-   > slider package or component. Shall I install `<suggested-package>`? Alternatively I
-   > can leave the markup static with a TODO.
+**Step one is measured, not guessed.** `d2c inventory` (§3a) prints a
+**Kurulu UI paketleri** block from the project's `package.json`:
+
+```
+## Kurulu UI paketleri
+   carousel : — YOK
+   ⚠ Carousel paketi YOK — kendi motorunu YAZMA. Kullanıcıya sor (SKILL.md §3a4).
+```
+
+Read that block before you write anything. Then, in order:
+
+1. **A carousel package is installed** (`embla-carousel-react`, `swiper`, `keen-slider`,
+   `@splidejs/react-splide`, `react-slick`, `@mantine/carousel`, …) → **use it.** Do not
+   add a second one.
+2. **A UI kit is installed** that already ships the primitive you need — Radix for
+   tabs/accordion/dialog, Headless UI, shadcn/ui's `components/ui/carousel.tsx` (which is
+   Embla underneath) → **use it.**
+3. **The project has its own `Carousel` / `Slider` / `Swiper` component** → reuse it.
+   `d2c inventory` lists it.
+4. **None of the above → STOP AND ASK.** Do not install, and do not improvise:
+
+   > The design shows a carousel (arrows + dots). The project has no carousel package or
+   > component. Which would you prefer?
+   >   1. `embla-carousel-react` — light, headless, no styles of its own (recommended)
+   >   2. `swiper` — batteries included, heavier
+   >   3. `keen-slider` — small, no dependencies
+   >   4. Don't install anything: I leave the markup static with a TODO
+   >
+   > Until you decide I will leave the section static.
 
    Wait for the answer. Adding a dependency is the user's decision, not yours.
-4. **A simple case may not need a library at all** — a horizontally scrolling strip with
-   `overflow-x-auto` + `scroll-snap` covers many designs with no dependency. Suggest this
-   when it fits.
+
+**While you wait, ship static markup — not half an engine.** The structure (track, items
+as siblings, dots and arrows as real `<button>`s with `aria-label`) plus
+`{/* TODO: carousel behaviour — waiting on a package decision */}`. No JS state.
+
+**The one narrow exception.** If the design has **no arrows and no dots** — just a strip
+of cards that runs off the edge — then it is not a carousel, it is a scrollable list, and
+plain CSS covers it:
+
+```
+overflow-x-auto snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden
+```
+
+**Zero JavaScript.** The moment you need a dot to light up, an arrow to work, or an index
+to be tracked, you are writing an engine — go back to step 1.
 
 ### 3. Generate the code
 

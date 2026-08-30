@@ -86,6 +86,11 @@ comments for decoration; mark only what is genuinely missing.
   ship a static strip as if it were finished.
 - **No dependency is installed without the user's approval.** Use what the project already
   has; if there is nothing, ask (see SKILL.md §3a4).
+- **No hand-rolled carousel engine.** A `useCarousel` hook, a scroll listener, index
+  state, a `ResizeObserver`, snap-position arithmetic — none of these are written. Either
+  the project's package/component is used, or the question is asked and the markup stays
+  static until it is answered. The only thing allowed without a package is a **zero-JS**
+  scrollable strip, and only when the design has no arrows and no dots.
 
 ## 5. Token discipline
 
